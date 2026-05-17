@@ -36,16 +36,6 @@ build-backend = "setuptools.build_meta"
 where = ["."]
 include = ["src*"]
 
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "A", "SIM"]
-
-[tool.ruff.lint.isort]
-known-first-party = ["src"]
-
 [tool.mypy]
 python_version = "3.12"
 strict = true

@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **7%** | Remaining: **93%** | Current Phase: **0**
+> Completed: **8%** | Remaining: **92%** | Current Phase: **0**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -64,7 +64,7 @@ with volume mounts), .env.example (all env vars). Created placeholder schema.sql
 in backend/db/. YAML validated programmatically (Docker Desktop not on this machine).
 ```
 
-### [ ] 0.4 — Git hygiene + linting setup (1%)
+### [x] 0.4 — Git hygiene + linting setup (1%)
 
 Create `.gitignore` (Python + Node + env + Docker volumes).
 Configure `ruff.toml` (line-length=100, target=py312, isort).
@@ -76,7 +76,9 @@ Frontend: ESLint + Prettier config.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Rewrote root .gitignore (Python+Node+Docker+IDE+Terraform). Moved ruff
+config to standalone backend/ruff.toml. mypy stays in pyproject.toml (already strict).
+Added Prettier + eslint-config-prettier to frontend. All linters pass clean.
 ```
 
 ### [ ] 0.5 — CI workflow scaffold (2%)
@@ -720,3 +722,4 @@ Notes:
 | 2026-05-17 | 0.1 | Python backend initialized: pyproject.toml, src/config.py (pydantic-settings) |
 | 2026-05-17 | 0.2 | Next.js 14 frontend scaffolded with TS, Tailwind, zustand, API proxy |
 | 2026-05-17 | 0.3 | Docker Compose with 8 services, override for dev, .env.example |
+| 2026-05-17 | 0.4 | .gitignore, ruff.toml, Prettier + ESLint config |
