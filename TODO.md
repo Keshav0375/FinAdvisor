@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **64%** | Remaining: **36%** | Current Phase: **5**
+> Completed: **66%** | Remaining: **34%** | Current Phase: **5**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -528,7 +528,7 @@ DB-less mode. docker-compose.yml already had correct Kong wiring (build: ./kong,
 litellm, port 8001:8000). YAML validated programmatically. Docker verification deferred.
 ```
 
-### [ ] 5.3 — Fallback chain verification (2%)
+### [x] 5.3 — Fallback chain verification (2%)
 
 Integration test: disable Claude key → verify GPT-4o fallback.
 Disable both → verify Gemini fallback.
@@ -539,7 +539,11 @@ Verify circuit breaker trips after 3 consecutive failures.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created test_fallback_chain.py with 5 tests verifying agent behavior under LLM provider
+failures: primary success, fallback transparency (LiteLLM handles routing internally), all-providers-fail
+propagation, rate-limit error propagation, circuit-breaker simulation (3 consecutive failures raise).
+Created scripts/test_fallback_live.py for Docker-based manual verification (LiteLLM health, primary route
+through Kong, rate-limit header presence). Live Docker verification deferred. 67 passed, 2 skipped.
 ```
 
 ---
@@ -830,3 +834,4 @@ Notes:
 | 2026-05-17 | 4.6 | Agent orchestrator: ReAct loop, StreamEvent types, system prompt v1.0.0, 8 tests |
 | 2026-05-17 | 5.1 | LiteLLM proxy: config.yaml (3 models, fallback chain, circuit breaker), Dockerfile |
 | 2026-05-17 | 5.2 | Kong gateway: kong.yml (rate-limit, request-size, http-log), Dockerfile, DB-less mode |
+| 2026-05-17 | 5.3 | Fallback chain: 5 unit tests (error propagation, circuit breaker), live script |
