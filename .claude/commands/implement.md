@@ -42,6 +42,12 @@ Execute the task matching "$ARGUMENTS" from TODO.md.
    feat: {short description of what was built}
    ```
 
+10. **Handoff**: After the commit, read TODO.md to find the next uncompleted task. Present a one-click prompt to the user:
+    - Show the next task number and title
+    - Option 1: "Yes, run next task" — if selected, immediately invoke `/implement {next_task_number}`
+    - Option 2: "No, stop here"
+    - This keeps the pipeline moving without the user having to type `/implement X.Y` each time
+
 ## Rules
 
 - Never skip the quality gate (step 5)

@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **51%** | Remaining: **49%** | Current Phase: **4**
+> Completed: **53%** | Remaining: **47%** | Current Phase: **4**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -414,7 +414,7 @@ tier. 6 tests against real ingested data: exact match, partial match, case insen
 filtering (US vs EU), tier filtering, no match. 40 passed, 2 skipped.
 ```
 
-### [ ] 4.4 — Tool: escalate_to_compliance (2%)
+### [x] 4.4 — Tool: escalate_to_compliance (2%)
 
 Create `backend/src/agent/tools/escalate.py`:
 - Input: reason, product_class, advisor_licenses
@@ -426,7 +426,11 @@ Create `backend/src/agent/tools/escalate.py`:
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created escalate.py with Pydantic models (EscalateInput, EscalationRecord) and
+escalate_to_compliance() async function. Generates ESC-{advisor_id}-{timestamp} escalation ID,
+logs compliance_escalation warning via structlog, returns EscalationRecord with status="pending_review".
+No DB involved — pure logging tool for MVP. 6 tests: structured output, ID format, ISO timestamp,
+log emission (mock verified), tool schema, multi-user differentiation. 46 passed, 2 skipped.
 ```
 
 ### [ ] 4.5 — Tool registry + DI wiring (2%)
@@ -798,3 +802,4 @@ Notes:
 | 2026-05-17 | 4.1 | search_firm_kb tool: VectorStore, Pydantic models, embed→search pipeline, 4 tests |
 | 2026-05-17 | 4.2 | lookup_suitability_rule tool: jurisdiction+tier filtering, 5 seeded tests |
 | 2026-05-17 | 4.3 | lookup_product_factsheet tool: ILIKE fuzzy match, jurisdiction+tier filter, 6 tests |
+| 2026-05-17 | 4.4 | escalate_to_compliance tool: structured escalation record, structlog warning, 6 tests |
