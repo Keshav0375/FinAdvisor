@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **58%** | Remaining: **42%** | Current Phase: **4**
+> Completed: **61%** | Remaining: **39%** | Current Phase: **5**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -487,7 +487,7 @@ version. 62 passed, 2 skipped.
 
 ## Phase 5 — LLM Routing: LiteLLM + Kong (8%)
 
-### [ ] 5.1 — LiteLLM proxy configuration (3%)
+### [x] 5.1 — LiteLLM proxy configuration (3%)
 
 Create `litellm/config.yaml`: model routing (Claude primary, GPT-4o fallback,
 Gemini fallback). Circuit breaker: 3 fails → 5min cooldown.
@@ -501,7 +501,12 @@ Send test request → routes to Claude.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created litellm/config.yaml with 3 model entries (Claude primary, GPT-4o fallback,
+Gemini fallback) all behind model name "claude-sonnet-4-20250514". Router: simple-shuffle strategy,
+2 retries, fallback chain claude-primary→gpt4o→gemini, circuit breaker 3 fails / 300s cooldown.
+Created litellm/Dockerfile from ghcr.io/berriai/litellm:main-latest. API keys confirmed: Anthropic
+and Google available, OpenAI deferred. YAML validated programmatically. Docker verification deferred
+(Docker Desktop not running on this machine).
 ```
 
 ### [ ] 5.2 — Kong AI Gateway configuration (3%)
@@ -819,3 +824,4 @@ Notes:
 | 2026-05-17 | 4.4 | escalate_to_compliance tool: structured escalation record, structlog warning, 6 tests |
 | 2026-05-17 | 4.5 | ToolRegistry: DI wiring, Anthropic schema gen, execute dispatcher, 8 tests |
 | 2026-05-17 | 4.6 | Agent orchestrator: ReAct loop, StreamEvent types, system prompt v1.0.0, 8 tests |
+| 2026-05-17 | 5.1 | LiteLLM proxy: config.yaml (3 models, fallback chain, circuit breaker), Dockerfile |
