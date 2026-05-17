@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **10%** | Remaining: **90%** | Current Phase: **0**
+> Completed: **13%** | Remaining: **87%** | Current Phase: **1**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -101,7 +101,7 @@ Both triggered on PR to main + push to main. YAML validated. Created tests/__ini
 
 ## Phase 1 — Database Schema & RLS (10%)
 
-### [ ] 1.1 — PostgreSQL schema file (3%)
+### [x] 1.1 — PostgreSQL schema file (3%)
 
 Create `backend/db/schema.sql` with exact schema from ARCHITECTURE.md Section 3:
 - `documents` table (full metadata)
@@ -117,7 +117,11 @@ Create `backend/db/schema.sql` with exact schema from ARCHITECTURE.md Section 3:
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Full schema implemented from ARCHITECTURE.md Section 3. 19 SQL statements:
+extensions (vector, pgcrypto), 3 tables (documents, chunks, suitability_rules),
+4 indexes (ivfflat embedding + btree on document_id, jurisdiction, tier), RLS policy
+(chunk_visibility), 2 roles with conditional creation (DO block), grants.
+Docker not available — validated via sqlparse (19 statements parse correctly).
 ```
 
 ### [ ] 1.2 — SQLAlchemy ORM models (2%)
@@ -726,3 +730,4 @@ Notes:
 | 2026-05-17 | 0.3 | Docker Compose with 8 services, override for dev, .env.example |
 | 2026-05-17 | 0.4 | .gitignore, ruff.toml, Prettier + ESLint config |
 | 2026-05-17 | 0.5 | CI workflows: ci.yml (lint+test) + eval-gate.yml (placeholder) |
+| 2026-05-17 | 1.1 | Full PostgreSQL schema: 3 tables, RLS, indexes, roles |
