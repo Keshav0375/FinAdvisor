@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **2%** | Remaining: **98%** | Current Phase: **0**
+> Completed: **4%** | Remaining: **96%** | Current Phase: **0**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -29,7 +29,7 @@ with pydantic-settings Settings class covering all env vars from ARCHITECTURE.md
 Verified: pip install -e ".[dev]" succeeds, Settings imports cleanly.
 ```
 
-### [ ] 0.2 — Initialize Next.js frontend project (2%)
+### [x] 0.2 — Initialize Next.js frontend project (2%)
 
 Create `frontend/` with Next.js 14 (App Router), TypeScript, Tailwind CSS.
 Install: zustand (state), eventsource-parser (SSE). Configure `next.config.js`
@@ -40,7 +40,10 @@ to proxy `/api` to backend at `localhost:8000`.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Scaffolded via create-next-app@14 (App Router, TypeScript, Tailwind, src dir).
+Installed zustand + eventsource-parser. Configured next.config.mjs with rewrites
+proxying /api/* to localhost:8000. Simplified page.tsx to minimal placeholder.
+Verified: npm run dev starts (Ready in 4s), npm run build succeeds, npm run lint clean.
 ```
 
 ### [ ] 0.3 — Docker Compose foundation (3%)
@@ -712,3 +715,4 @@ Notes:
 |------|------|-------|
 | — | — | Project initialized |
 | 2026-05-17 | 0.1 | Python backend initialized: pyproject.toml, src/config.py (pydantic-settings) |
+| 2026-05-17 | 0.2 | Next.js 14 frontend scaffolded with TS, Tailwind, zustand, API proxy |
