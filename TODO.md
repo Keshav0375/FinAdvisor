@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **25%** | Remaining: **75%** | Current Phase: **2**
+> Completed: **28%** | Remaining: **72%** | Current Phase: **2**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -212,7 +212,7 @@ All 50 JSON files generated successfully (396-541 words each). PII embedded in p
 notices. Stale dates on select docs. Cost: ~$0.75 (50 Claude Sonnet calls).
 ```
 
-### [ ] 2.2 — PII redaction module (3%)
+### [x] 2.2 — PII redaction module (3%)
 
 Create `backend/src/pii/redactor.py`: GCP DLP wrapper (PIIRedactor class).
 Create `backend/src/pii/fallback.py`: regex-based fallback for local dev.
@@ -224,7 +224,10 @@ email, account numbers. DLP mock test passes.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created src/pii/ module: redactor.py (GCP DLP PIIRedactor with deidentify_content),
+fallback.py (RegexRedactor with patterns for SSN, phone, email, account numbers),
+__init__.py (factory picks mode from Settings.pii_mode). Both return RedactionResult dataclass
+with redacted_text + findings list. 10 tests pass (7 regex, 1 DLP mock, 2 factory).
 ```
 
 ### [ ] 2.3 — Voyage AI embeddings client (2%)
@@ -749,3 +752,4 @@ Notes:
 | 2026-05-17 | 1.3 | Async session factory, RLS helpers, UserClaims model |
 | 2026-05-17 | 1.4 | RLS integration tests: conftest fixtures, 3 policy tests |
 | 2026-05-17 | 2.1 | Synthetic corpus generator: 50 docs (20 factsheets, 10 rules, 10 memos, 10 disclosures) |
+| 2026-05-17 | 2.2 | PII redaction module: GCP DLP wrapper + regex fallback, factory pattern, 10 tests |
