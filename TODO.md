@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **37%** | Remaining: **63%** | Current Phase: **3**
+> Completed: **39%** | Remaining: **61%** | Current Phase: **3**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -300,7 +300,7 @@ Added data/seed/mock_users.json for frontend consumption. Ignored ruff B008 glob
 FastAPI Depends() pattern). 3 tests: valid user, unknown user 401, missing header 401.
 ```
 
-### [ ] 3.2 — Auth middleware integration (2%)
+### [x] 3.2 — Auth middleware integration (2%)
 
 Wire `get_current_user` as FastAPI dependency. Return 401 for unknown users.
 Add request logging with structlog (user_id, tier, jurisdictions per request).
@@ -311,7 +311,11 @@ invalid user returns 401, missing header returns 401.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created src/main.py (app factory with lifespan, request logging middleware via
+structlog — logs method, path, status, duration_ms, user_id per request). Created src/api/
+package with health.py (/api/health + /api/me endpoints). Updated test_auth.py to use real app
+(5 tests: valid user, unknown 401, missing 401, health endpoint, request logging). Ignored
+ruff B008 globally for FastAPI Depends().
 ```
 
 ### [ ] 3.3 — End-to-end RLS verification (4%)
@@ -768,3 +772,4 @@ Notes:
 | 2026-05-17 | 2.3 | Voyage AI embeddings client: batch embed, rate limit, retry, 1024-dim verified |
 | 2026-05-17 | 2.4 | Ingest pipeline: load → redact → chunk → embed → insert. 50 docs → 114 chunks |
 | 2026-05-17 | 3.1 | Mock users + JWT: 4 users, get_current_user dependency, X-User-Id header auth |
+| 2026-05-17 | 3.2 | Auth middleware: FastAPI app factory, request logging, /api/health + /api/me |
