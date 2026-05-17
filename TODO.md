@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **53%** | Remaining: **47%** | Current Phase: **4**
+> Completed: **55%** | Remaining: **45%** | Current Phase: **4**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -433,7 +433,7 @@ No DB involved — pure logging tool for MVP. 6 tests: structured output, ID for
 log emission (mock verified), tool schema, multi-user differentiation. 46 passed, 2 skipped.
 ```
 
-### [ ] 4.5 — Tool registry + DI wiring (2%)
+### [x] 4.5 — Tool registry + DI wiring (2%)
 
 Create `backend/src/agent/tools/__init__.py`: ToolRegistry class.
 Anthropic schema generation from Pydantic models.
@@ -445,7 +445,13 @@ Tool execution dispatcher with user context injection.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created ToolRegistry class in src/agent/tools/__init__.py. Holds all 4 tool schemas
+(search_firm_kb, lookup_suitability_rule, lookup_product_factsheet, escalate_to_compliance).
+to_anthropic_schema() returns Anthropic-compatible tool list. execute(name, input, user) dispatches
+to the correct async tool function with DI (VectorStore, AsyncSession, VoyageEmbeddings injected
+at registry init). Returns JSON-serialized Pydantic output. 8 tests: schema completeness, required
+fields, tool names, escalate dispatch, unknown tool error, search_kb dispatch with mocks, JSON
+output format, input validation. 54 passed, 2 skipped.
 ```
 
 ### [ ] 4.6 — Agent orchestrator (ReAct loop) (3%)
@@ -803,3 +809,4 @@ Notes:
 | 2026-05-17 | 4.2 | lookup_suitability_rule tool: jurisdiction+tier filtering, 5 seeded tests |
 | 2026-05-17 | 4.3 | lookup_product_factsheet tool: ILIKE fuzzy match, jurisdiction+tier filter, 6 tests |
 | 2026-05-17 | 4.4 | escalate_to_compliance tool: structured escalation record, structlog warning, 6 tests |
+| 2026-05-17 | 4.5 | ToolRegistry: DI wiring, Anthropic schema gen, execute dispatcher, 8 tests |
