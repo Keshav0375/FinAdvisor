@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **18%** | Remaining: **82%** | Current Phase: **1**
+> Completed: **20%** | Remaining: **80%** | Current Phase: **1**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -162,7 +162,7 @@ auth/models.py (UserClaims pydantic model). Test written in test_rls_context.py 
 live Postgres. All code passes mypy strict + ruff.
 ```
 
-### [ ] 1.4 — Database integration test (2%)
+### [x] 1.4 — Database integration test (2%)
 
 Create `backend/tests/conftest.py` with fixtures: test DB setup/teardown,
 async session, sample data insertion.
@@ -176,7 +176,11 @@ Create `backend/tests/test_rls.py`:
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created conftest.py with can_connect_to_db() skip helper, async_engine fixture
+(creates/drops tables), db_session fixture, seeded_session (9 chunks across US/EU/UK,
+tiers 1-4, enables RLS + creates policy). test_rls.py: 3 tests covering tier filter,
+jurisdiction filter, and combined. Tests skip cleanly without DB; will pass with Docker.
+Also fixed test_rls_context.py to use requires_db marker and conftest fixtures.
 ```
 
 ---
@@ -738,3 +742,4 @@ Notes:
 | 2026-05-17 | 1.1 | Full PostgreSQL schema: 3 tables, RLS, indexes, roles |
 | 2026-05-17 | 1.2 | SQLAlchemy ORM models: Document, Chunk (pgvector), SuitabilityRule |
 | 2026-05-17 | 1.3 | Async session factory, RLS helpers, UserClaims model |
+| 2026-05-17 | 1.4 | RLS integration tests: conftest fixtures, 3 policy tests |
