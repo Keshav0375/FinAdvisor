@@ -7,11 +7,15 @@ from src.auth.models import UserClaims
 
 
 async def set_rls_context(session: AsyncSession, user: UserClaims) -> None:
-    await session.execute(
-        text("SET app.user_tier = :tier"),
-        {"tier": str(user.tier_level)},
-    )
-    await session.execute(
-        text("SET app.user_jurisdictions = :jurisdictions"),
-        {"jurisdictions": ",".join(user.jurisdictions)},
-    )
+    # finadvisor is a superuser and bypasses RLS; switch to the app role
+    await session.execute(text("SET ROLE finadvisor_app"))
+    # SET does not support parameterized queries in asyncpg; values are
+    # validated by the UserClaims Pydantic model so literal interpolation is safe.
+    tier = int(user.tier_level)
+    jurisdictions = ",".join(user.jurisdictions)
+    await session.execute(text(f"SET app.user_tier = '{tier}'"))
+    await session.execute(text(f"SET app.user_jurisdictions = '{jurisdictions}'"))
+
+
+async def reset_rls_context(session: AsyncSession) -> None:
+    await session.execute(text("RESET ROLE"))

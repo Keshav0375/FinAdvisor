@@ -191,7 +191,7 @@ async def ingest(
     log.info("embedding_complete", vectors_returned=len(embeddings))
 
     for i, emb in enumerate(embeddings):
-        all_chunks[i]["embedding"] = emb
+        all_chunks[i]["embedding"] = str(emb)
 
     db_url = settings.database_url
     if target == "test":

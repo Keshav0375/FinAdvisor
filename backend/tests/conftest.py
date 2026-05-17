@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import date
@@ -12,6 +13,8 @@ from src.auth.models import UserClaims
 from src.db.models import Base
 
 TEST_DATABASE_URL = "postgresql+asyncpg://finadvisor:localdev@localhost:5432/finadvisor"
+
+SEED_CONTENT_PREFIX = "__TEST_SEED__"
 
 
 def can_connect_to_db() -> bool:
@@ -44,8 +47,6 @@ async def async_engine():  # type: ignore[no-untyped-def]
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
         await conn.run_sync(Base.metadata.create_all)
     yield engine
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
 
 
@@ -57,21 +58,37 @@ async def db_session(async_engine) -> AsyncGenerator[AsyncSession, None]:  # typ
 
 
 @pytest.fixture
-async def seeded_session(db_session: AsyncSession) -> AsyncSession:
+async def live_session() -> AsyncGenerator[AsyncSession, None]:
+    engine = create_async_engine(TEST_DATABASE_URL)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session:
+        yield session
+    await engine.dispose()
+
+
+@pytest.fixture
+async def seeded_session(
+    db_session: AsyncSession,
+) -> AsyncGenerator[AsyncSession, None]:
+    test_doc_ids: list[str] = []
+
     chunks_data = [
-        ("US tier-1 chunk", "US", 1, "US Product Sheet"),
-        ("US tier-2 chunk", "US", 2, "US Senior Guide"),
-        ("US tier-3 chunk", "US", 3, "US Private Strategy"),
-        ("US tier-4 chunk", "US", 4, "US Ultra HNW Doc"),
-        ("EU tier-1 chunk", "EU", 1, "EU Basic Disclosure"),
-        ("EU tier-2 chunk", "EU", 2, "EU Advisory Guide"),
-        ("EU tier-3 chunk", "EU", 3, "EU Compliance Memo"),
-        ("UK tier-1 chunk", "UK", 1, "UK Regulatory Notice"),
-        ("UK tier-4 chunk", "UK", 4, "UK Private Wealth"),
+        (f"{SEED_CONTENT_PREFIX} US tier-1 chunk", "US", 1, "US Product Sheet"),
+        (f"{SEED_CONTENT_PREFIX} US tier-2 chunk", "US", 2, "US Senior Guide"),
+        (f"{SEED_CONTENT_PREFIX} US tier-3 chunk", "US", 3, "US Private Strategy"),
+        (f"{SEED_CONTENT_PREFIX} US tier-4 chunk", "US", 4, "US Ultra HNW Doc"),
+        (f"{SEED_CONTENT_PREFIX} EU tier-1 chunk", "EU", 1, "EU Basic Disclosure"),
+        (f"{SEED_CONTENT_PREFIX} EU tier-2 chunk", "EU", 2, "EU Advisory Guide"),
+        (f"{SEED_CONTENT_PREFIX} EU tier-3 chunk", "EU", 3, "EU Compliance Memo"),
+        (f"{SEED_CONTENT_PREFIX} UK tier-1 chunk", "UK", 1, "UK Regulatory Notice"),
+        (f"{SEED_CONTENT_PREFIX} UK tier-2 chunk", "UK", 2, "UK Advisory Guide"),
+        (f"{SEED_CONTENT_PREFIX} UK tier-3 chunk", "UK", 3, "UK Compliance Memo"),
+        (f"{SEED_CONTENT_PREFIX} UK tier-4 chunk", "UK", 4, "UK Private Wealth"),
     ]
 
     for content, jurisdiction, tier, title in chunks_data:
         doc_id = uuid.uuid4()
+        test_doc_ids.append(str(doc_id))
         embedding = [0.1] * 1024
         await db_session.execute(
             text("""
@@ -108,7 +125,6 @@ async def seeded_session(db_session: AsyncSession) -> AsyncSession:
         )
     await db_session.commit()
 
-    # Enable RLS on chunks for the test session
     await db_session.execute(text("ALTER TABLE chunks ENABLE ROW LEVEL SECURITY"))
     await db_session.execute(text("ALTER TABLE chunks FORCE ROW LEVEL SECURITY"))
     await db_session.execute(
@@ -131,7 +147,16 @@ async def seeded_session(db_session: AsyncSession) -> AsyncSession:
         """)
     )
     await db_session.commit()
-    return db_session
+
+    yield db_session
+
+    with contextlib.suppress(Exception):
+        await db_session.rollback()
+    await db_session.execute(text("RESET ROLE"))
+    for doc_id in test_doc_ids:
+        await db_session.execute(text("DELETE FROM chunks WHERE document_id = :id"), {"id": doc_id})
+        await db_session.execute(text("DELETE FROM documents WHERE id = :id"), {"id": doc_id})
+    await db_session.commit()
 
 
 SARAH_CHEN = UserClaims(
@@ -150,6 +175,15 @@ ALEX_KIM = UserClaims(
     tier_level=1,
     jurisdictions=["EU"],
     licenses=["MiFID-II"],
+)
+
+JAMES_WRIGHT = UserClaims(
+    sub="james_wright",
+    name="James Wright",
+    tier="private_wealth",
+    tier_level=4,
+    jurisdictions=["UK"],
+    licenses=["FCA"],
 )
 
 PRIYA_SHARMA = UserClaims(

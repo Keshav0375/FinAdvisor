@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **39%** | Remaining: **61%** | Current Phase: **3**
+> Completed: **43%** | Remaining: **57%** | Current Phase: **3**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -318,7 +318,7 @@ package with health.py (/api/health + /api/me endpoints). Updated test_auth.py t
 ruff B008 globally for FastAPI Depends().
 ```
 
-### [ ] 3.3 — End-to-end RLS verification (4%)
+### [x] 3.3 — End-to-end RLS verification (4%)
 
 Full integration test: ingest sample docs → set RLS context per user →
 run vector similarity search → verify result sets differ by user.
@@ -336,7 +336,14 @@ Test matrix:
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created test_rls_e2e.py — 5 E2E tests using vector similarity search (ORDER BY
+embedding <=> query LIMIT k) against real ingested data (114 chunks). All 4 user scenarios pass
+with zero unauthorized leakage: sarah_chen (US/tier-3, 43 chunks), alex_kim (EU/tier-1, 10),
+james_wright (UK/tier-4, 26), priya_sharma (US+EU/tier-2, 55). Fixed critical issues: SET ROLE
+finadvisor_app in set_rls_context (superuser was bypassing RLS), SET command literal interpolation
+(asyncpg doesn't support parameterized SET), removed drop_all from test teardown (was destroying
+real data). Added reset_rls_context helper. Updated seeded tests with __TEST_SEED__ prefix and
+cleanup. Security review approved.
 ```
 
 ---
@@ -773,3 +780,4 @@ Notes:
 | 2026-05-17 | 2.4 | Ingest pipeline: load → redact → chunk → embed → insert. 50 docs → 114 chunks |
 | 2026-05-17 | 3.1 | Mock users + JWT: 4 users, get_current_user dependency, X-User-Id header auth |
 | 2026-05-17 | 3.2 | Auth middleware: FastAPI app factory, request logging, /api/health + /api/me |
+| 2026-05-17 | 3.3 | E2E RLS verification: 5 tests, vector search, zero leakage, SET ROLE fix |
