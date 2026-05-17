@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **15%** | Remaining: **85%** | Current Phase: **1**
+> Completed: **18%** | Remaining: **82%** | Current Phase: **1**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -143,7 +143,7 @@ DeclarativeBase + mapped_column. Vector(1024) column via pgvector-python. Relati
 between Document ↔ Chunk with cascade delete. mypy passes, import verified.
 ```
 
-### [ ] 1.3 — Async session factory + RLS helpers (3%)
+### [x] 1.3 — Async session factory + RLS helpers (3%)
 
 Create `backend/src/db/session.py`: async SQLAlchemy session factory using
 `create_async_engine` + `async_sessionmaker`.
@@ -156,7 +156,10 @@ that SETs app.user_tier and app.user_jurisdictions via raw SQL.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created session.py (build_engine factory with pool_size=5, max_overflow=10),
+rls.py (set_rls_context sets app.user_tier and app.user_jurisdictions via SET commands),
+auth/models.py (UserClaims pydantic model). Test written in test_rls_context.py — requires
+live Postgres. All code passes mypy strict + ruff.
 ```
 
 ### [ ] 1.4 — Database integration test (2%)
@@ -734,3 +737,4 @@ Notes:
 | 2026-05-17 | 0.5 | CI workflows: ci.yml (lint+test) + eval-gate.yml (placeholder) |
 | 2026-05-17 | 1.1 | Full PostgreSQL schema: 3 tables, RLS, indexes, roles |
 | 2026-05-17 | 1.2 | SQLAlchemy ORM models: Document, Chunk (pgvector), SuitabilityRule |
+| 2026-05-17 | 1.3 | Async session factory, RLS helpers, UserClaims model |
