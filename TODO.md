@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **4%** | Remaining: **96%** | Current Phase: **0**
+> Completed: **7%** | Remaining: **93%** | Current Phase: **0**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -46,7 +46,7 @@ proxying /api/* to localhost:8000. Simplified page.tsx to minimal placeholder.
 Verified: npm run dev starts (Ready in 4s), npm run build succeeds, npm run lint clean.
 ```
 
-### [ ] 0.3 — Docker Compose foundation (3%)
+### [x] 0.3 — Docker Compose foundation (3%)
 
 Create `docker-compose.yml` with services: postgres (pgvector/pgvector:pg16),
 backend, frontend, litellm, kong, langfuse, langfuse-db, redis.
@@ -58,7 +58,10 @@ Create `.env.example` with all required env vars (no real keys).
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created docker-compose.yml (8 services: postgres, backend, frontend,
+litellm, kong, langfuse, langfuse-db, redis), docker-compose.override.yml (hot-reload
+with volume mounts), .env.example (all env vars). Created placeholder schema.sql
+in backend/db/. YAML validated programmatically (Docker Desktop not on this machine).
 ```
 
 ### [ ] 0.4 — Git hygiene + linting setup (1%)
@@ -716,3 +719,4 @@ Notes:
 | — | — | Project initialized |
 | 2026-05-17 | 0.1 | Python backend initialized: pyproject.toml, src/config.py (pydantic-settings) |
 | 2026-05-17 | 0.2 | Next.js 14 frontend scaffolded with TS, Tailwind, zustand, API proxy |
+| 2026-05-17 | 0.3 | Docker Compose with 8 services, override for dev, .env.example |

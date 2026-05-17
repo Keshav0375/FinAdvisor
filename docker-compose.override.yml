@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/tests:/app/tests
+    command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+    environment:
+      LOG_LEVEL: debug
+
+  frontend:
+    volumes:
+      - ./frontend/src:/app/src
+    command: npm run dev
+    environment:
+      NODE_ENV: development
