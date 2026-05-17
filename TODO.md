@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **0%** | Remaining: **100%** | Current Phase: **0**
+> Completed: **2%** | Remaining: **98%** | Current Phase: **0**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -10,7 +10,7 @@
 
 ## Phase 0 — Foundation & Tooling (10%)
 
-### [ ] 0.1 — Initialize Python backend project (2%)
+### [x] 0.1 — Initialize Python backend project (2%)
 
 Create `backend/pyproject.toml` with uv/pip management. Define dependencies:
 fastapi, uvicorn, sqlalchemy[asyncio], asyncpg, pydantic-settings, anthropic,
@@ -23,7 +23,10 @@ Create `backend/src/__init__.py` and `backend/src/config.py` with pydantic-setti
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created pyproject.toml with all runtime + dev deps, setuptools build,
+ruff (line-length=100, py312, isort) and mypy (strict) config. Created src/config.py
+with pydantic-settings Settings class covering all env vars from ARCHITECTURE.md.
+Verified: pip install -e ".[dev]" succeeds, Settings imports cleanly.
 ```
 
 ### [ ] 0.2 — Initialize Next.js frontend project (2%)
@@ -708,3 +711,4 @@ Notes:
 | Date | Task | Notes |
 |------|------|-------|
 | — | — | Project initialized |
+| 2026-05-17 | 0.1 | Python backend initialized: pyproject.toml, src/config.py (pydantic-settings) |
