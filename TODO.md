@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **28%** | Remaining: **72%** | Current Phase: **2**
+> Completed: **30%** | Remaining: **70%** | Current Phase: **2**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -230,7 +230,7 @@ __init__.py (factory picks mode from Settings.pii_mode). Both return RedactionRe
 with redacted_text + findings list. 10 tests pass (7 regex, 1 DLP mock, 2 factory).
 ```
 
-### [ ] 2.3 — Voyage AI embeddings client (2%)
+### [x] 2.3 — Voyage AI embeddings client (2%)
 
 Create `backend/src/retrieval/embeddings.py`:
 - VoyageEmbeddings class with batch embedding (voyage-3, 1024 dims)
@@ -244,7 +244,10 @@ Create `backend/src/retrieval/embeddings.py`:
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created src/retrieval/embeddings.py with VoyageEmbeddings class. Uses voyage-3 model
+(1024 dims), batch size 128, rate limit 3 RPS via asyncio.Semaphore, exponential backoff retry
+(3 attempts). sync SDK wrapped in asyncio.to_thread(). Integration test verified: single text
+returns 1024-dim vector, batch of 3 returns correct count. API key confirmed available.
 ```
 
 ### [ ] 2.4 — Ingest pipeline script (5%)
@@ -753,3 +756,4 @@ Notes:
 | 2026-05-17 | 1.4 | RLS integration tests: conftest fixtures, 3 policy tests |
 | 2026-05-17 | 2.1 | Synthetic corpus generator: 50 docs (20 factsheets, 10 rules, 10 memos, 10 disclosures) |
 | 2026-05-17 | 2.2 | PII redaction module: GCP DLP wrapper + regex fallback, factory pattern, 10 tests |
+| 2026-05-17 | 2.3 | Voyage AI embeddings client: batch embed, rate limit, retry, 1024-dim verified |
