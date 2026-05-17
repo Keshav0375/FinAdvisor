@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **49%** | Remaining: **51%** | Current Phase: **4**
+> Completed: **51%** | Remaining: **49%** | Current Phase: **4**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -395,7 +395,7 @@ WHERE clause. 5 tests: US user match, EU user match, multi-jurisdiction, tier fi
 no match. All seeded rules cleaned up after tests. 34 passed, 2 skipped.
 ```
 
-### [ ] 4.3 — Tool: lookup_product_factsheet (2%)
+### [x] 4.3 — Tool: lookup_product_factsheet (2%)
 
 Create `backend/src/agent/tools/lookup_factsheet.py`:
 - Input: product_name (fuzzy match on title)
@@ -407,7 +407,11 @@ Create `backend/src/agent/tools/lookup_factsheet.py`:
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created lookup_factsheet.py with Pydantic models (FactsheetInput, FactsheetResult,
+FactsheetOutput) and lookup_product_factsheet() async function. Queries documents table with
+ILIKE fuzzy match on title, filtered by doc_type='product_factsheet', user jurisdictions, and
+tier. 6 tests against real ingested data: exact match, partial match, case insensitive, jurisdiction
+filtering (US vs EU), tier filtering, no match. 40 passed, 2 skipped.
 ```
 
 ### [ ] 4.4 — Tool: escalate_to_compliance (2%)
@@ -793,3 +797,4 @@ Notes:
 | 2026-05-17 | 3.3 | E2E RLS verification: 5 tests, vector search, zero leakage, SET ROLE fix |
 | 2026-05-17 | 4.1 | search_firm_kb tool: VectorStore, Pydantic models, embed→search pipeline, 4 tests |
 | 2026-05-17 | 4.2 | lookup_suitability_rule tool: jurisdiction+tier filtering, 5 seeded tests |
+| 2026-05-17 | 4.3 | lookup_product_factsheet tool: ILIKE fuzzy match, jurisdiction+tier filter, 6 tests |
