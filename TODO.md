@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **47%** | Remaining: **53%** | Current Phase: **4**
+> Completed: **49%** | Remaining: **51%** | Current Phase: **4**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -375,7 +375,7 @@ mocked deps, empty results test, integration test with RLS (sarah_chen sees 5 re
 VectorStore RLS verification (sarah_chen sees exactly 43 chunks). 29 passed, 2 skipped.
 ```
 
-### [ ] 4.2 — Tool: lookup_suitability_rule (2%)
+### [x] 4.2 — Tool: lookup_suitability_rule (2%)
 
 Create `backend/src/agent/tools/lookup_suitability.py`:
 - Input: product_category, client_risk_profile
@@ -387,7 +387,12 @@ Create `backend/src/agent/tools/lookup_suitability.py`:
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created lookup_suitability.py with Pydantic models (SuitabilityInput,
+SuitabilityRuleResult, SuitabilityOutput) and lookup_suitability_rule() async function.
+Queries suitability_rules table filtered by product_category, client_risk_profile,
+user jurisdictions, and min_tier_required. No RLS on this table — filtering done in
+WHERE clause. 5 tests: US user match, EU user match, multi-jurisdiction, tier filter,
+no match. All seeded rules cleaned up after tests. 34 passed, 2 skipped.
 ```
 
 ### [ ] 4.3 — Tool: lookup_product_factsheet (2%)
@@ -787,3 +792,4 @@ Notes:
 | 2026-05-17 | 3.2 | Auth middleware: FastAPI app factory, request logging, /api/health + /api/me |
 | 2026-05-17 | 3.3 | E2E RLS verification: 5 tests, vector search, zero leakage, SET ROLE fix |
 | 2026-05-17 | 4.1 | search_firm_kb tool: VectorStore, Pydantic models, embed→search pipeline, 4 tests |
+| 2026-05-17 | 4.2 | lookup_suitability_rule tool: jurisdiction+tier filtering, 5 seeded tests |
