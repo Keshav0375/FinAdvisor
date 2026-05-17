@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **13%** | Remaining: **87%** | Current Phase: **1**
+> Completed: **15%** | Remaining: **85%** | Current Phase: **1**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -124,7 +124,7 @@ extensions (vector, pgcrypto), 3 tables (documents, chunks, suitability_rules),
 Docker not available — validated via sqlparse (19 statements parse correctly).
 ```
 
-### [ ] 1.2 — SQLAlchemy ORM models (2%)
+### [x] 1.2 — SQLAlchemy ORM models (2%)
 
 Create `backend/src/db/models.py`:
 - `Document` model (maps to documents table)
@@ -138,7 +138,9 @@ Use mapped_column with proper types. Vector column via pgvector-python.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created 3 ORM models (Document, Chunk, SuitabilityRule) using SQLAlchemy 2.x
+DeclarativeBase + mapped_column. Vector(1024) column via pgvector-python. Relationship
+between Document ↔ Chunk with cascade delete. mypy passes, import verified.
 ```
 
 ### [ ] 1.3 — Async session factory + RLS helpers (3%)
@@ -731,3 +733,4 @@ Notes:
 | 2026-05-17 | 0.4 | .gitignore, ruff.toml, Prettier + ESLint config |
 | 2026-05-17 | 0.5 | CI workflows: ci.yml (lint+test) + eval-gate.yml (placeholder) |
 | 2026-05-17 | 1.1 | Full PostgreSQL schema: 3 tables, RLS, indexes, roles |
+| 2026-05-17 | 1.2 | SQLAlchemy ORM models: Document, Chunk (pgvector), SuitabilityRule |
