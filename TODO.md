@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **55%** | Remaining: **45%** | Current Phase: **4**
+> Completed: **58%** | Remaining: **42%** | Current Phase: **4**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -454,7 +454,7 @@ fields, tool names, escalate dispatch, unknown tool error, search_kb dispatch wi
 output format, input validation. 54 passed, 2 skipped.
 ```
 
-### [ ] 4.6 — Agent orchestrator (ReAct loop) (3%)
+### [x] 4.6 — Agent orchestrator (ReAct loop) (3%)
 
 Create `backend/src/agent/orchestrator.py`: FinAdvisorAgent class.
 - ReAct loop: query → Claude → tool_use → execute → loop → final text
@@ -472,7 +472,15 @@ Create `backend/src/agent/types.py`: StreamEvent, ToolCallEvent, CitationEvent.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created 3 files: types.py (StreamEvent with Literal type, ToolCallEvent, CitationEvent
+Pydantic models), system_prompt.py (versioned SYSTEM_PROMPT v1.0.0 from ARCHITECTURE.md, get_system_prompt()
+helper), orchestrator.py (FinAdvisorAgent class with ReAct loop). Agent uses AsyncAnthropic client,
+ToolRegistry for dispatch, optional LangFuse for tracing. Max 5 iterations, yields StreamEvent async
+generator (tool_call, tool_result, text, error). Tool errors caught and returned as JSON error payloads.
+LangFuse integration creates trace → generation per iteration → span per tool. System prompt approved
+by human. 8 tests with mocked LLM: single-turn text, tool_use→text loop, max iterations error, tool
+execution error handling, LangFuse trace integration, multiple tool calls, system prompt content and
+version. 62 passed, 2 skipped.
 ```
 
 ---
@@ -810,3 +818,4 @@ Notes:
 | 2026-05-17 | 4.3 | lookup_product_factsheet tool: ILIKE fuzzy match, jurisdiction+tier filter, 6 tests |
 | 2026-05-17 | 4.4 | escalate_to_compliance tool: structured escalation record, structlog warning, 6 tests |
 | 2026-05-17 | 4.5 | ToolRegistry: DI wiring, Anthropic schema gen, execute dispatcher, 8 tests |
+| 2026-05-17 | 4.6 | Agent orchestrator: ReAct loop, StreamEvent types, system prompt v1.0.0, 8 tests |
