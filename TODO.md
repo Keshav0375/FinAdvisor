@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **20%** | Remaining: **80%** | Current Phase: **1**
+> Completed: **25%** | Remaining: **75%** | Current Phase: **2**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -187,7 +187,7 @@ Also fixed test_rls_context.py to use requires_db marker and conftest fixtures.
 
 ## Phase 2 — Synthetic Corpus & Ingest Pipeline (15%)
 
-### [ ] 2.1 — Synthetic document generator (5%)
+### [x] 2.1 — Synthetic document generator (5%)
 
 Create `backend/scripts/generate_corpus.py`:
 - Uses Claude API to generate 50 documents following ARCHITECTURE.md Section 4
@@ -204,7 +204,12 @@ Spot-check: valid structure, tier/jurisdiction tags present, some PII embedded.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created generate_corpus.py (720+ lines) using Claude API (claude-sonnet-4-20250514)
+to produce 50 synthetic financial docs. 50 DOCUMENT_SPECS with full metadata (jurisdiction,
+tier, risk_level, product_category, regulatory_ref, stale/pii flags). Supports --dry-run.
+Output: data/corpus/{product_factsheets,suitability_rules,compliance_memos,jurisdiction_disclosures}/.
+All 50 JSON files generated successfully (396-541 words each). PII embedded in privacy/data
+notices. Stale dates on select docs. Cost: ~$0.75 (50 Claude Sonnet calls).
 ```
 
 ### [ ] 2.2 — PII redaction module (3%)
@@ -743,3 +748,4 @@ Notes:
 | 2026-05-17 | 1.2 | SQLAlchemy ORM models: Document, Chunk (pgvector), SuitabilityRule |
 | 2026-05-17 | 1.3 | Async session factory, RLS helpers, UserClaims model |
 | 2026-05-17 | 1.4 | RLS integration tests: conftest fixtures, 3 policy tests |
+| 2026-05-17 | 2.1 | Synthetic corpus generator: 50 docs (20 factsheets, 10 rules, 10 memos, 10 disclosures) |
