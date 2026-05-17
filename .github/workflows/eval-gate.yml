@@ -1,0 +1,81 @@
+name: Eval Gate
+
+# Activated in Phase 8 — currently a placeholder.
+# Will run the golden Q&A eval set against the agent and enforce
+# citation_accuracy >= 95% and faithfulness >= 90%.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  eval-gate:
+    if: false  # Disabled until Phase 8
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: finadvisor_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+        working-directory: backend
+
+      - name: Setup DB and seed eval data
+        run: |
+          psql -h localhost -U test -d finadvisor_test -f backend/db/schema.sql
+          python backend/scripts/ingest.py --target test
+        env:
+          PGPASSWORD: test
+
+      - name: Run eval set
+        run: |
+          python backend/scripts/run_eval.py \
+            --eval-set data/eval/golden_qa.json \
+            --output eval_results.json
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+
+      - name: Check thresholds
+        run: |
+          python -c "
+          import json, sys
+          results = json.load(open('eval_results.json'))
+          faith = results['avg_faithfulness']
+          cite = results['avg_citation_accuracy']
+          print(f'Faithfulness: {faith:.2%}')
+          print(f'Citation accuracy: {cite:.2%}')
+          if cite < 0.95:
+              print('CITATION ACCURACY BELOW 95% - DEPLOY BLOCKED')
+              sys.exit(1)
+          if faith < 0.90:
+              print('FAITHFULNESS BELOW 90% - DEPLOY BLOCKED')
+              sys.exit(1)
+          print('Eval gate passed')
+          "
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval_results.json

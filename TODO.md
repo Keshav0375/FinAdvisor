@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **8%** | Remaining: **92%** | Current Phase: **0**
+> Completed: **10%** | Remaining: **90%** | Current Phase: **0**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -81,7 +81,7 @@ config to standalone backend/ruff.toml. mypy stays in pyproject.toml (already st
 Added Prettier + eslint-config-prettier to frontend. All linters pass clean.
 ```
 
-### [ ] 0.5 — CI workflow scaffold (2%)
+### [x] 0.5 — CI workflow scaffold (2%)
 
 Create `.github/workflows/ci.yml`: lint + typecheck + unit tests.
 Create `.github/workflows/eval-gate.yml`: placeholder (activated in Phase 8).
@@ -92,7 +92,9 @@ Both triggered on PR to main.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created ci.yml (backend: ruff+mypy+pytest, frontend: lint+tsc+build)
+and eval-gate.yml (placeholder with if:false, full structure from ARCHITECTURE.md).
+Both triggered on PR to main + push to main. YAML validated. Created tests/__init__.py.
 ```
 
 ---
@@ -723,3 +725,4 @@ Notes:
 | 2026-05-17 | 0.2 | Next.js 14 frontend scaffolded with TS, Tailwind, zustand, API proxy |
 | 2026-05-17 | 0.3 | Docker Compose with 8 services, override for dev, .env.example |
 | 2026-05-17 | 0.4 | .gitignore, ruff.toml, Prettier + ESLint config |
+| 2026-05-17 | 0.5 | CI workflows: ci.yml (lint+test) + eval-gate.yml (placeholder) |
