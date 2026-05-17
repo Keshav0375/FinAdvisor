@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **43%** | Remaining: **57%** | Current Phase: **3**
+> Completed: **47%** | Remaining: **53%** | Current Phase: **4**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -350,7 +350,7 @@ cleanup. Security review approved.
 
 ## Phase 4 — Agent Orchestrator & Tools (15%)
 
-### [ ] 4.1 — Tool: search_firm_kb (4%)
+### [x] 4.1 — Tool: search_firm_kb (4%)
 
 Create `backend/src/agent/tools/search_kb.py`:
 - Pydantic input/output models (SearchKBInput, ChunkResult, SearchKBOutput)
@@ -367,7 +367,12 @@ Integration test with real DB returns RLS-filtered results.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created VectorStore class (src/retrieval/vector_store.py) with similarity_search()
+using pgvector cosine distance + RLS-filtered results. Created search_kb.py tool with Pydantic
+models (SearchKBInput, ChunkResult, SearchKBOutput) and search_firm_kb() async function that
+embeds query via Voyage AI → vector similarity search → typed results. 4 tests: unit test with
+mocked deps, empty results test, integration test with RLS (sarah_chen sees 5 results),
+VectorStore RLS verification (sarah_chen sees exactly 43 chunks). 29 passed, 2 skipped.
 ```
 
 ### [ ] 4.2 — Tool: lookup_suitability_rule (2%)
@@ -781,3 +786,4 @@ Notes:
 | 2026-05-17 | 3.1 | Mock users + JWT: 4 users, get_current_user dependency, X-User-Id header auth |
 | 2026-05-17 | 3.2 | Auth middleware: FastAPI app factory, request logging, /api/health + /api/me |
 | 2026-05-17 | 3.3 | E2E RLS verification: 5 tests, vector search, zero leakage, SET ROLE fix |
+| 2026-05-17 | 4.1 | search_firm_kb tool: VectorStore, Pydantic models, embed→search pipeline, 4 tests |
