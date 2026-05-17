@@ -1,0 +1,29 @@
+_format_version: "3.0"
+
+services:
+  - name: llm-service
+    url: http://litellm:4000
+    routes:
+      - name: llm-route
+        paths:
+          - /v1
+        strip_path: false
+
+plugins:
+  - name: rate-limiting
+    config:
+      minute: 60
+      hour: 500
+      policy: local
+      identifier: header
+      header_name: X-User-Id
+
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 1
+
+  - name: http-log
+    config:
+      http_endpoint: http://backend:8000/api/audit/kong
+      method: POST
+      content_type: application/json

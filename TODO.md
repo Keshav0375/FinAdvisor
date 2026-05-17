@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **61%** | Remaining: **39%** | Current Phase: **5**
+> Completed: **64%** | Remaining: **36%** | Current Phase: **5**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -509,7 +509,7 @@ and Google available, OpenAI deferred. YAML validated programmatically. Docker v
 (Docker Desktop not running on this machine).
 ```
 
-### [ ] 5.2 — Kong AI Gateway configuration (3%)
+### [x] 5.2 — Kong AI Gateway configuration (3%)
 
 Create `kong/kong.yml`: declarative config with rate-limiting, request-size-limiting,
 http-log plugins.
@@ -521,7 +521,11 @@ Wire Kong → LiteLLM in docker-compose.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created kong/kong.yml (declarative config v3.0): llm-service → http://litellm:4000,
+route /v1. 3 plugins: rate-limiting (60/min, 500/hr per X-User-Id header), request-size-limiting
+(1MB), http-log (POST to backend audit endpoint). Created kong/Dockerfile from kong:3.9 with
+DB-less mode. docker-compose.yml already had correct Kong wiring (build: ./kong, depends_on:
+litellm, port 8001:8000). YAML validated programmatically. Docker verification deferred.
 ```
 
 ### [ ] 5.3 — Fallback chain verification (2%)
@@ -825,3 +829,4 @@ Notes:
 | 2026-05-17 | 4.5 | ToolRegistry: DI wiring, Anthropic schema gen, execute dispatcher, 8 tests |
 | 2026-05-17 | 4.6 | Agent orchestrator: ReAct loop, StreamEvent types, system prompt v1.0.0, 8 tests |
 | 2026-05-17 | 5.1 | LiteLLM proxy: config.yaml (3 models, fallback chain, circuit breaker), Dockerfile |
+| 2026-05-17 | 5.2 | Kong gateway: kong.yml (rate-limit, request-size, http-log), Dockerfile, DB-less mode |
