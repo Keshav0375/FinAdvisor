@@ -1,0 +1,34 @@
+[
+  {
+    "sub": "sarah_chen",
+    "name": "Sarah Chen",
+    "tier": "senior",
+    "tier_level": 3,
+    "jurisdictions": ["US"],
+    "licenses": ["Series-7", "Series-66"]
+  },
+  {
+    "sub": "alex_kim",
+    "name": "Alex Kim",
+    "tier": "associate",
+    "tier_level": 1,
+    "jurisdictions": ["EU"],
+    "licenses": ["MiFID-II"]
+  },
+  {
+    "sub": "james_wright",
+    "name": "James Wright",
+    "tier": "private_wealth",
+    "tier_level": 4,
+    "jurisdictions": ["UK"],
+    "licenses": ["FCA"]
+  },
+  {
+    "sub": "priya_sharma",
+    "name": "Priya Sharma",
+    "tier": "advisor",
+    "tier_level": 2,
+    "jurisdictions": ["US", "EU"],
+    "licenses": ["Series-7", "MiFID-II"]
+  }
+]

@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **35%** | Remaining: **65%** | Current Phase: **2**
+> Completed: **37%** | Remaining: **63%** | Current Phase: **3**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -282,7 +282,7 @@ TODO's 200-300 estimate due to 2048-char chunk size vs docs averaging ~2500 char
 
 ## Phase 3 — Auth & RLS Verification (8%)
 
-### [ ] 3.1 — Mock user profiles + JWT models (2%)
+### [x] 3.1 — Mock user profiles + JWT models (2%)
 
 Create `backend/src/auth/mock_users.py`: MOCK_USERS dict (4 users from arch).
 Create `backend/src/auth/models.py`: UserClaims pydantic model.
@@ -294,7 +294,10 @@ Create `data/seed/mock_users.json`: same data in JSON for frontend.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Created mock_users.py (4 users from ARCHITECTURE.md), jwt.py (get_current_user
+dependency using X-User-Id header lookup). UserClaims model already existed from 1.3.
+Added data/seed/mock_users.json for frontend consumption. Ignored ruff B008 globally (standard
+FastAPI Depends() pattern). 3 tests: valid user, unknown user 401, missing header 401.
 ```
 
 ### [ ] 3.2 — Auth middleware integration (2%)
@@ -764,3 +767,4 @@ Notes:
 | 2026-05-17 | 2.2 | PII redaction module: GCP DLP wrapper + regex fallback, factory pattern, 10 tests |
 | 2026-05-17 | 2.3 | Voyage AI embeddings client: batch embed, rate limit, retry, 1024-dim verified |
 | 2026-05-17 | 2.4 | Ingest pipeline: load → redact → chunk → embed → insert. 50 docs → 114 chunks |
+| 2026-05-17 | 3.1 | Mock users + JWT: 4 users, get_current_user dependency, X-User-Id header auth |
