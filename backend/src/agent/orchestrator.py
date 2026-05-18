@@ -7,6 +7,7 @@ import anthropic
 import structlog
 
 from src.auth.models import UserClaims
+from src.observability.tracing import TracingContext, get_prompt_from_langfuse
 
 from .system_prompt import SYSTEM_PROMPT_VERSION, get_system_prompt
 from .tools import ToolRegistry
@@ -30,6 +31,7 @@ class FinAdvisorAgent:
         self._tools = tool_registry
         self._langfuse = langfuse
         self._model = model
+        self._tracing = TracingContext(langfuse)
 
     async def run(
         self,
@@ -38,17 +40,15 @@ class FinAdvisorAgent:
         *,
         max_iterations: int = 5,
     ) -> AsyncGenerator[StreamEvent, None]:
-        trace = None
-        if self._langfuse is not None:
-            trace = self._langfuse.trace(
-                name="finadvisor_query",
-                user_id=user.sub,
-                metadata={
-                    "tier": user.tier,
-                    "jurisdictions": user.jurisdictions,
-                    "prompt_version": SYSTEM_PROMPT_VERSION,
-                },
-            )
+        self._tracing.start_trace(
+            name="finadvisor_query",
+            user_id=user.sub,
+            metadata={
+                "tier": user.tier,
+                "jurisdictions": user.jurisdictions,
+                "prompt_version": SYSTEM_PROMPT_VERSION,
+            },
+        )
 
         log.info(
             "agent_run_start",
@@ -58,16 +58,16 @@ class FinAdvisorAgent:
         )
 
         messages: list[dict[str, Any]] = [{"role": "user", "content": query}]
-        system = get_system_prompt()
+
+        versioned_prompt = get_prompt_from_langfuse(self._langfuse, name="finadvisor-system")
+        system = versioned_prompt if versioned_prompt else get_system_prompt()
 
         for iteration in range(max_iterations):
-            generation = None
-            if trace is not None:
-                generation = trace.generation(
-                    name=f"iteration_{iteration}",
-                    model=self._model,
-                    input=messages,
-                )
+            generation = self._tracing.start_generation(
+                name=f"iteration_{iteration}",
+                model=self._model,
+                input_data=messages,
+            )
 
             response = await self._client.messages.create(
                 model=self._model,
@@ -77,8 +77,7 @@ class FinAdvisorAgent:
                 tools=cast(Any, self._tools.to_anthropic_schema()),
             )
 
-            if generation is not None:
-                generation.end(output=response.model_dump())
+            self._tracing.end_generation(generation, response.model_dump())
 
             log.info(
                 "agent_iteration",
@@ -104,9 +103,10 @@ class FinAdvisorAgent:
                             ),
                         )
 
-                        span = None
-                        if trace is not None:
-                            span = trace.span(name=f"tool_{block.name}")
+                        span = self._tracing.start_span(
+                            name=f"tool_{block.name}",
+                            input_data=block.input,
+                        )
 
                         try:
                             result = await self._tools.execute(
@@ -122,8 +122,7 @@ class FinAdvisorAgent:
                             )
                             result = f'{{"error": "{exc!s}"}}'
 
-                        if span is not None:
-                            span.end(output=result)
+                        self._tracing.end_span(span, result)
 
                         yield StreamEvent(type="tool_result", content=result)
 
@@ -140,8 +139,7 @@ class FinAdvisorAgent:
             else:
                 final_text = "".join(b.text for b in response.content if hasattr(b, "text"))
 
-                if trace is not None:
-                    trace.update(output=final_text)
+                self._tracing.update_trace(output=final_text)
 
                 log.info(
                     "agent_run_complete",

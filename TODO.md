@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **86%** | Remaining: **14%** | Current Phase: **7**
+> Completed: **89%** | Remaining: **11%** | Current Phase: **8**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -738,7 +738,7 @@ Notes:
 
 ## Phase 8 — LangFuse Observability & Eval (8%)
 
-### [ ] 8.1 — LangFuse integration (3%)
+### [x] 8.1 — LangFuse integration (3%)
 
 Create `backend/src/observability/tracing.py`: LangFuse trace context manager.
 Wire into agent orchestrator: trace per query, generation per LLM call,
@@ -752,7 +752,15 @@ full call chain: generations + spans + tool results.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: LangFuse observability integration complete.
+- tracing.py: TracingContext class wraps LangFuse client — noop-safe when None,
+  supports trace/generation/span lifecycle, scoring, flush, prompt versioning
+- get_prompt_from_langfuse(): fetches versioned system prompt with fallback
+- orchestrator.py: refactored to use TracingContext — trace per query, generation
+  per iteration, span per tool call, prompt versioning via LangFuse
+- docker-compose.langfuse.yml: standalone LangFuse + Postgres, auto-init org/project/keys
+- 12 unit tests covering all TracingContext methods and prompt retrieval
+- Docker verification deferred (Docker Desktop not available on this machine)
 ```
 
 ### [ ] 8.2 — Golden Q&A eval set (2%)
@@ -897,3 +905,4 @@ Notes:
 | 2026-05-17 | 7.2 | Chat interface: ChatWindow, MessageBubble, StreamingText, useChat hook, SSE API client |
 | 2026-05-17 | 7.3 | Citation system: CitationInline, CitationPanel, StaleBadge, [N] parser, inline rendering |
 | 2026-05-17 | 7.4 | UI polish: professional styling, responsive layout, animations, loading states |
+| 2026-05-17 | 8.1 | LangFuse integration: TracingContext, prompt versioning, standalone compose, 12 tests |
