@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **85%** | Remaining: **15%** | Current Phase: **7**
+> Completed: **86%** | Remaining: **14%** | Current Phase: **7**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -709,7 +709,7 @@ Notes:
 - ESLint clean, build passes
 ```
 
-### [ ] 7.4 — UI polish + responsive design (1%)
+### [x] 7.4 — UI polish + responsive design (1%)
 
 Professional finance styling: clean typography, subtle colors, proper spacing.
 Mobile-responsive chat layout. Loading states. Error display.
@@ -721,7 +721,17 @@ Mobile-responsive chat layout. Loading states. Error display.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Polished UI for professional finance look.
+- globals.css: neutral gray background, Geist font, thin scrollbar styling
+- Header.tsx: sticky header with FA logo badge, subtitle, responsive layout
+- UserSwitcher.tsx: compact responsive dropdown, tier/jurisdiction badges hidden on mobile
+- ChatWindow.tsx: empty state with chat icon + description, spinner on send button,
+  improved spacing, scrollbar-thin, responsive padding
+- MessageBubble.tsx: rounded-2xl bubbles, tool call separator, blue cursor, animation classes
+- CitationPanel.tsx: shadow-lg popup, SVG icons for regulatory ref + close button,
+  formatted date display
+- tailwind.config.ts: fade-in/slide-up animations
+- ESLint clean, build passes (91.4 kB first load)
 ```
 
 ---
@@ -886,3 +896,4 @@ Notes:
 | 2026-05-17 | 7.1 | Layout + UserSwitcher: zustand store, localStorage persistence, Header, 4 mock users |
 | 2026-05-17 | 7.2 | Chat interface: ChatWindow, MessageBubble, StreamingText, useChat hook, SSE API client |
 | 2026-05-17 | 7.3 | Citation system: CitationInline, CitationPanel, StaleBadge, [N] parser, inline rendering |
+| 2026-05-17 | 7.4 | UI polish: professional styling, responsive layout, animations, loading states |
