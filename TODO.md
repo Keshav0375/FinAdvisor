@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **76%** | Remaining: **24%** | Current Phase: **6**
+> Completed: **78%** | Remaining: **22%** | Current Phase: **7**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -642,7 +642,7 @@ Notes:
 
 ## Phase 7 — Next.js Frontend (10%)
 
-### [ ] 7.1 — Layout + UserSwitcher component (2%)
+### [x] 7.1 — Layout + UserSwitcher component (2%)
 
 Create `frontend/src/app/layout.tsx`: base layout with header.
 Create `frontend/src/components/UserSwitcher.tsx`: dropdown with 4 mock users.
@@ -654,7 +654,13 @@ Create `frontend/src/lib/users.ts`: mock user profiles (synced with backend).
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Built layout, header, UserSwitcher, and user state.
+- lib/users.ts: 4 mock users synced with backend (sarah_chen, alex_kim, james_wright, priya_sharma)
+- hooks/useUser.ts: zustand store with localStorage persistence
+- components/UserSwitcher.tsx: dropdown showing name, tier, jurisdictions, licenses
+- components/Header.tsx: "use client" header with FinAdvisor title + UserSwitcher
+- layout.tsx: updated metadata, added Header + max-w-5xl container
+- Build passes, ESLint clean, dev server verified at localhost:3000
 ```
 
 ### [ ] 7.2 — Chat interface + SSE streaming (4%)
@@ -863,3 +869,4 @@ Notes:
 | 2026-05-17 | 6.2 | SSE streaming endpoint: /chat/stream, Pydantic schemas, PII output redaction, 7 tests |
 | 2026-05-17 | 6.3 | Structured logging: structlog JSON config, error hierarchy, global exception handler, 11 tests |
 | 2026-05-17 | 6.4 | Integration test suite: 9 E2E tests, conftest fixtures, SSE stream parsing, 94 total tests |
+| 2026-05-17 | 7.1 | Layout + UserSwitcher: zustand store, localStorage persistence, Header, 4 mock users |
