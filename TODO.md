@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **99%** | Remaining: **1%** | Current Phase: **9**
+> Completed: **100%** | Remaining: **0%** | Current Phase: **DONE**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -878,7 +878,7 @@ Notes:
 - HUMAN APPROVAL required before any terraform apply
 ```
 
-### [ ] 9.3 — Documentation + demo script (1%)
+### [x] 9.3 — Documentation + demo script (1%)
 
 Create `README.md`: architecture diagram (mermaid), setup instructions,
 demo walkthrough link.
@@ -890,7 +890,15 @@ Create `docs/threat_model.md`: security considerations doc.
 ```
 Notes:
 ─────
-(pending)
+2026-05-18: Documentation complete. All 3 files created.
+- README.md: mermaid architecture diagram, request flow, tech stack table,
+  key features, mock users, quick start guide, key commands, project structure
+- docs/demo_script.md: 3 main scenes (product suitability with Sarah Chen,
+  jurisdiction enforcement with Alex Kim, refusal/escalation) + 2 optional
+  scenes (stale doc warning, LangFuse tracing). Recording tips included.
+- docs/threat_model.md: 7 sections covering RLS, PII protection, auth,
+  LLM security (prompt injection, data exfiltration), infrastructure security,
+  eval gates, compliance considerations (audit trail, regulatory refs, data residency)
 ```
 
 ---
@@ -951,3 +959,4 @@ Notes:
 | 2026-05-17 | 8.3 | Eval runner: run_eval.py with LLM-as-judge, baseline comparison, threshold gates, 14 tests |
 | 2026-05-18 | 9.1 | GitHub Actions eval gate: activated workflow, lint-and-test + eval-gate jobs, threshold checks |
 | 2026-05-18 | 9.2 | Terraform IaC: 9 files, Cloud Run (5 services), Cloud SQL (2 DBs), secrets, IAM, GCS, registry |
+| 2026-05-18 | 9.3 | Documentation: README.md (mermaid diagram), demo_script.md (5 scenes), threat_model.md (7 sections) |
