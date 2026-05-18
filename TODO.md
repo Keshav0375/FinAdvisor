@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **68%** | Remaining: **32%** | Current Phase: **6**
+> Completed: **72%** | Remaining: **28%** | Current Phase: **6**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -572,7 +572,7 @@ aggregator. Created backend/Dockerfile (python:3.12-slim, uvicorn). health.py al
 3.2. All existing tests pass unchanged (67 passed, 2 skipped). Docker verification deferred.
 ```
 
-### [ ] 6.2 — SSE streaming endpoint (4%)
+### [x] 6.2 — SSE streaming endpoint (4%)
 
 Create `backend/src/api/chat.py`: POST /api/chat/stream.
 - Accepts ChatRequest (message, conversation_id)
@@ -589,7 +589,13 @@ streams SSE events. Citations appear in output.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Built SSE streaming endpoint and Pydantic schemas.
+- Created ChatRequest, Citation, ChatResponse in schemas.py
+- POST /chat/stream with EventSourceResponse via sse-starlette
+- _format_sse_event handles text/tool_call/tool_result/citation/error
+- Output PII redaction on text events via RegexRedactor dependency
+- 7 tests: 5 unit (_format_sse_event), 1 integration (full SSE stream), 1 auth (401)
+- Used dependency_overrides pattern to mock lifespan-initialized state in tests
 ```
 
 ### [ ] 6.3 — Structured logging + error handling (2%)
@@ -842,3 +848,4 @@ Notes:
 | 2026-05-17 | 5.2 | Kong gateway: kong.yml (rate-limit, request-size, http-log), Dockerfile, DB-less mode |
 | 2026-05-17 | 5.3 | Fallback chain: 5 unit tests (error propagation, circuit breaker), live script |
 | 2026-05-17 | 6.1 | App factory: lifespan (DB, embeddings, LLM, PII, LangFuse), DI providers, Dockerfile |
+| 2026-05-17 | 6.2 | SSE streaming endpoint: /chat/stream, Pydantic schemas, PII output redaction, 7 tests |
