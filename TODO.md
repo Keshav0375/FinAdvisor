@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **91%** | Remaining: **9%** | Current Phase: **8**
+> Completed: **94%** | Remaining: **6%** | Current Phase: **9**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -790,7 +790,7 @@ Notes:
 - Human approval: granted.
 ```
 
-### [ ] 8.3 — Eval runner script (3%)
+### [x] 8.3 — Eval runner script (3%)
 
 Create `backend/scripts/run_eval.py`:
 - Runs each golden Q&A against the agent
@@ -804,7 +804,18 @@ produces results. Citation accuracy > 90% on first run.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Eval runner script created.
+- scripts/run_eval.py: standalone async eval runner — loads golden_qa.json,
+  streams queries to backend API via httpx, collects responses/tool calls/tool results,
+  sends to LLM-as-judge (Claude) for faithfulness/citation_accuracy/refusal scoring,
+  outputs results.json with per-question + aggregate + by-category scores.
+- Supports --compare-baseline for delta comparison against previous results.
+- Supports --limit for quick partial runs.
+- Checks tool call expectations and must_not_contain content violations.
+- print_summary() shows formatted table + threshold gate (citation >95%, faith >90%).
+- 14 unit tests: file loading, tool call/content checks, judge JSON parsing,
+  judge error handling, golden_qa.json + judge_prompt.txt validation.
+- Full verification deferred (requires live backend stack).
 ```
 
 ---
@@ -916,3 +927,4 @@ Notes:
 | 2026-05-17 | 7.4 | UI polish: professional styling, responsive layout, animations, loading states |
 | 2026-05-17 | 8.1 | LangFuse integration: TracingContext, prompt versioning, standalone compose, 12 tests |
 | 2026-05-17 | 8.2 | Golden Q&A eval set: 50 entries (5 categories, 4 users), judge prompt, human-approved |
+| 2026-05-17 | 8.3 | Eval runner: run_eval.py with LLM-as-judge, baseline comparison, threshold gates, 14 tests |
