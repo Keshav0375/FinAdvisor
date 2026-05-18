@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **96%** | Remaining: **4%** | Current Phase: **9**
+> Completed: **99%** | Remaining: **1%** | Current Phase: **9**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -847,7 +847,7 @@ Notes:
 - Full CI verification deferred (requires GitHub PR to trigger workflow)
 ```
 
-### [ ] 9.2 — Terraform IaC (3%)
+### [x] 9.2 — Terraform IaC (3%)
 
 Create `terraform/` with all resources from ARCHITECTURE.md Section 15:
 - main.tf, variables.tf, outputs.tf
@@ -862,7 +862,20 @@ Create `terraform/` with all resources from ARCHITECTURE.md Section 15:
 ```
 Notes:
 ─────
-(pending)
+2026-05-18: Terraform IaC created with 9 files.
+- main.tf: Google provider, GCS backend for tfstate, required_version >= 1.5
+- variables.tf: 14 variables (project_id, region, env, image tags, resource limits)
+- artifact_registry.tf: Docker repo + registry URL local
+- cloud_sql.tf: 2 Cloud SQL instances (app DB w/ pgvector enabled, LangFuse DB),
+  random passwords, DB URL secret version
+- cloud_run.tf: 5 Cloud Run services (backend, frontend, litellm, kong, langfuse)
+  with Secret Manager refs, Cloud SQL volumes, scaling config
+- cloud_storage.tf: 2 GCS buckets (corpus data, eval results) with versioning
+- secrets.tf: 9 Secret Manager secrets (API keys, DB URL, JWT, LangFuse)
+- iam.tf: 2 service accounts, IAM bindings (secret access, SQL client, DLP, storage)
+- outputs.tf: 10 outputs (service URLs, DB connections, registry, buckets)
+- terraform validate deferred (Terraform CLI not installed locally)
+- HUMAN APPROVAL required before any terraform apply
 ```
 
 ### [ ] 9.3 — Documentation + demo script (1%)
@@ -937,3 +950,4 @@ Notes:
 | 2026-05-17 | 8.2 | Golden Q&A eval set: 50 entries (5 categories, 4 users), judge prompt, human-approved |
 | 2026-05-17 | 8.3 | Eval runner: run_eval.py with LLM-as-judge, baseline comparison, threshold gates, 14 tests |
 | 2026-05-18 | 9.1 | GitHub Actions eval gate: activated workflow, lint-and-test + eval-gate jobs, threshold checks |
+| 2026-05-18 | 9.2 | Terraform IaC: 9 files, Cloud Run (5 services), Cloud SQL (2 DBs), secrets, IAM, GCS, registry |
