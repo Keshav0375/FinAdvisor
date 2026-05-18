@@ -6,11 +6,13 @@ from collections.abc import AsyncGenerator
 from datetime import date
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.auth.models import UserClaims
 from src.db.models import Base
+from src.main import app
 
 TEST_DATABASE_URL = "postgresql+asyncpg://finadvisor:localdev@localhost:5432/finadvisor"
 
@@ -194,3 +196,16 @@ PRIYA_SHARMA = UserClaims(
     jurisdictions=["US", "EU"],
     licenses=["Series-7", "MiFID-II"],
 )
+
+
+@pytest.fixture
+async def test_client() -> AsyncGenerator[AsyncClient, None]:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+@pytest.fixture
+def override_dependencies():  # type: ignore[no-untyped-def]
+    yield app.dependency_overrides
+    app.dependency_overrides.clear()

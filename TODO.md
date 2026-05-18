@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **74%** | Remaining: **26%** | Current Phase: **6**
+> Completed: **76%** | Remaining: **24%** | Current Phase: **6**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -618,7 +618,7 @@ Notes:
 - 11 tests: JSON format, contextvars, error hierarchy, 4 exception handlers, 2 middleware tests
 ```
 
-### [ ] 6.4 — Backend integration test suite (2%)
+### [x] 6.4 — Backend integration test suite (2%)
 
 Create `backend/tests/test_agent.py`: mock LLM responses, verify tool dispatch.
 Extend `conftest.py` with FastAPI test client fixtures.
@@ -629,7 +629,13 @@ Test: full request → SSE stream → parsed events contain citations.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Built comprehensive integration test suite.
+- Added test_client and override_dependencies fixtures to conftest.py
+- 9 integration tests: full stream with citations, multi-tool dispatch, error events,
+  PII output redaction, stream always ends with done, conversation_id, multi-user,
+  missing message 422, request-id header passthrough
+- Fixed SSE parser for Windows \r\n line endings (line.strip() == "")
+- Total: 94 tests pass (2 skipped for Voyage API), all quality gates clean
 ```
 
 ---
@@ -856,3 +862,4 @@ Notes:
 | 2026-05-17 | 6.1 | App factory: lifespan (DB, embeddings, LLM, PII, LangFuse), DI providers, Dockerfile |
 | 2026-05-17 | 6.2 | SSE streaming endpoint: /chat/stream, Pydantic schemas, PII output redaction, 7 tests |
 | 2026-05-17 | 6.3 | Structured logging: structlog JSON config, error hierarchy, global exception handler, 11 tests |
+| 2026-05-17 | 6.4 | Integration test suite: 9 E2E tests, conftest fixtures, SSE stream parsing, 94 total tests |
