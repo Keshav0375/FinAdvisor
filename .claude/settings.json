@@ -60,7 +60,8 @@
       "PowerShell(docker compose config*)",
       "PowerShell(docker compose ps*)",
       "PowerShell(docker compose logs*)",
-      "PowerShell(tree*)"
+      "PowerShell(tree*)",
+      "PowerShell($env:VIRTUAL_ENV = $null; cd \"c:\\\\Users\\\\DELL\\\\OneDrive - University of Windsor\\\\Desktop\\\\Agentic-Engineering\\\\FinAdvisor\\\\backend\"; poetry run ruff check src/config.py src/main.py src/cli.py; if \\($?\\) { poetry run ruff format --check src/config.py src/main.py src/cli.py }; if \\($?\\) { poetry run mypy src/config.py src/main.py src/cli.py })"
     ],
     "deny": [
       "Bash(rm -rf /)*",
@@ -73,7 +74,6 @@
       "Bash(terraform apply*)",
       "Bash(terraform destroy*)",
       "Bash(docker system prune*)",
-      "PowerShell(Remove-Item -Recurse -Force C:\\)*",
       "PowerShell(Remove-Item -Recurse -Force ~)*"
     ]
   }

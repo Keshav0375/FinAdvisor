@@ -42,11 +42,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.redactor = create_redactor(settings)
     log.info("pii_redactor_initialized", mode=settings.pii_mode)
 
+    llm_base = settings.llm_base_url or f"{settings.kong_url}/v1"
+    llm_key = settings.anthropic_api_key if settings.llm_base_url else settings.litellm_master_key
     app.state.llm_client = anthropic.AsyncAnthropic(
-        api_key=settings.litellm_master_key,
-        base_url=f"{settings.kong_url}/v1",
+        api_key=llm_key,
+        base_url=llm_base,
     )
-    log.info("llm_client_initialized", base_url=f"{settings.kong_url}/v1")
+    log.info("llm_client_initialized", base_url=llm_base)
 
     if settings.langfuse_public_key and settings.langfuse_secret_key:
         try:

@@ -1,17 +1,43 @@
 "use client";
 
-import { CitationInline } from "@/components/CitationInline";
+import { MarkdownContent } from "@/components/MarkdownContent";
+import { SourcesPanel } from "@/components/SourcesPanel";
+import { ToolCallCard } from "@/components/ToolCallCard";
 import type { Message } from "@/hooks/useChat";
-import { parseCitations } from "@/lib/parseCitations";
 
 interface MessageBubbleProps {
   message: Message;
 }
 
+function ThinkingIndicator() {
+  return (
+    <div className="flex items-center gap-1.5 py-1">
+      <span
+        className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400"
+        style={{ animationDelay: "0ms" }}
+      />
+      <span
+        className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400"
+        style={{ animationDelay: "150ms" }}
+      />
+      <span
+        className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400"
+        style={{ animationDelay: "300ms" }}
+      />
+    </div>
+  );
+}
+
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
-  const segments = parseCitations(message.content);
-  const citationMap = new Map(message.citations.map((c) => [c.index, c]));
+
+  const allToolsDone =
+    message.toolCalls.length > 0 &&
+    message.toolCalls.every((tc) => tc.status === "done");
+  const showThinking =
+    message.isStreaming &&
+    !message.content &&
+    (message.toolCalls.length === 0 || allToolsDone);
 
   return (
     <div
@@ -24,19 +50,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             : "border border-gray-100 bg-white text-gray-800"
         }`}
       >
-        {message.toolCalls.length > 0 && (
-          <div className="mb-2 space-y-1 border-b border-gray-100 pb-2">
+        {!isUser && message.toolCalls.length > 0 && (
+          <div className="mb-3 space-y-1.5">
             {message.toolCalls.map((tc) => (
-              <div
-                key={tc.toolUseId}
-                className="flex items-center gap-1.5 text-[11px] text-gray-400"
-              >
-                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-                <span className="font-mono">{tc.tool}</span>
-              </div>
+              <ToolCallCard key={tc.toolUseId} toolCall={tc} />
             ))}
           </div>
         )}
+
+        {showThinking && <ThinkingIndicator />}
 
         {message.error ? (
           <div className="flex items-start gap-2">
@@ -44,28 +66,28 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <p className="text-sm text-red-600">{message.error}</p>
           </div>
         ) : (
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
-            {isUser ? (
-              message.content
-            ) : (
-              <>
-                {segments.map((seg, i) =>
-                  seg.type === "text" ? (
-                    <span key={i}>{seg.content}</span>
-                  ) : (
-                    <CitationInline
-                      key={i}
-                      index={seg.index}
-                      citation={citationMap.get(seg.index)}
+          <>
+            <div className="text-sm leading-relaxed">
+              {isUser ? (
+                <p className="whitespace-pre-wrap">{message.content}</p>
+              ) : (
+                <>
+                  {message.content && (
+                    <MarkdownContent
+                      content={message.content}
+                      citations={message.citations}
                     />
-                  )
-                )}
-                {message.isStreaming && (
-                  <span className="ml-0.5 inline-block h-4 w-1 animate-pulse rounded-full bg-blue-400" />
-                )}
-              </>
+                  )}
+                  {message.isStreaming && message.content && (
+                    <span className="ml-0.5 inline-block h-4 w-1 animate-pulse rounded-full bg-blue-400" />
+                  )}
+                </>
+              )}
+            </div>
+            {!isUser && !message.isStreaming && (
+              <SourcesPanel citations={message.citations} />
             )}
-          </div>
+          </>
         )}
       </div>
     </div>

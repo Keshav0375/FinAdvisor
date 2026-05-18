@@ -1,0 +1,13 @@
+[tool.poetry]
+name = "finadvisor"
+version = "0.1.0"
+description = "Compliance-Aware Wealth Advisor RAG Assistant"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12,<3.14"
+finadvisor-backend = {path = "backend", develop = true}
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

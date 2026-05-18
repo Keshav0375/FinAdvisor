@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # Kong
     kong_url: str = "http://localhost:8001"
 
+    # Direct LLM base URL (bypasses Kong when set)
+    llm_base_url: str = ""
+
     # LangFuse
     langfuse_host: str = "http://localhost:3030"
     langfuse_public_key: str = ""

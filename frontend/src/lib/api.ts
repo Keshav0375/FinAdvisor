@@ -30,6 +30,7 @@ export async function streamChat(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let currentEvent = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -39,7 +40,6 @@ export async function streamChat(
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
 
-    let currentEvent = "";
     for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.startsWith("event:")) {

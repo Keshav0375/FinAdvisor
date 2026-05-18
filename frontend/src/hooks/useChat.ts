@@ -6,6 +6,9 @@ export interface ToolCall {
   tool: string;
   input: Record<string, unknown>;
   toolUseId: string;
+  status: "running" | "done";
+  startedAt: number;
+  durationMs?: number;
 }
 
 export interface Citation {
@@ -85,11 +88,33 @@ export function useChat() {
                       ...m,
                       toolCalls: [
                         ...m.toolCalls,
-                        { tool: data.tool, input: data.input, toolUseId: data.tool_use_id },
+                        {
+                          tool: data.tool,
+                          input: data.input,
+                          toolUseId: data.tool_use_id,
+                          status: "running" as const,
+                          startedAt: Date.now(),
+                        },
                       ],
                     }
                   : m
               )
+            );
+          } else if (event.event === "tool_result") {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== assistantId) return m;
+                const updated = [...m.toolCalls];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].status === "running") {
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    status: "done",
+                    durationMs: Date.now() - updated[lastIdx].startedAt,
+                  };
+                }
+                return { ...m, toolCalls: updated };
+              })
             );
           } else if (event.event === "citation") {
             const data = JSON.parse(event.data) as {

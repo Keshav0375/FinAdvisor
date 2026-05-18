@@ -84,38 +84,68 @@ User (browser)
 
 - Python 3.12+
 - Node.js 20 LTS
-- Docker Desktop (for PostgreSQL, LangFuse)
+- Docker Desktop **running** (for PostgreSQL)
 - API keys: `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`
 
-### Setup
+### One-Command Launch
 
 ```bash
-# 1. Clone and configure
-cp backend/.env.example backend/.env
-# Edit .env with your API keys
+# 1. Install via Poetry (one time, from project root)
+poetry install
 
-# 2. Start infrastructure
+# 2. Create backend/.env with your API keys
+#    ANTHROPIC_API_KEY=sk-ant-...
+#    VOYAGE_API_KEY=pa-...
+
+# 3. Start everything
+poetry run finadvisor
+```
+
+`poetry run finadvisor` handles everything automatically:
+- Checks Docker is running (warns if not)
+- Starts PostgreSQL + pgvector container
+- Applies database schema (if first run)
+- Ingests 50 synthetic documents with embeddings (if first run, costs ~$0.01 via Voyage AI)
+- Starts the FastAPI backend on `:8000`
+- Installs frontend deps and starts Next.js on `:3000`
+- Connects directly to Anthropic API (no gateway needed)
+
+After first run, starting the app consumes **zero API tokens**. LLM tokens are only used when you ask questions in the chat.
+
+### Sample Questions to Try
+
+1. **Select Sarah Chen** (US Senior, tier 3) and ask:
+   > "Is the Meridian Core Bond Fund suitable for a conservative retiree?"
+   
+   You'll see tool calls (`search_firm_kb`, `lookup_suitability_rule`), citation badges `[1]` `[2]` with FINRA references, and US-only results.
+
+2. **Switch to Alex Kim** (EU Associate, tier 1) and ask:
+   > "What US Treasury products can I recommend?"
+   
+   The agent refuses -- US is outside Alex's jurisdiction. Then ask:
+   > "What EU fixed-income products are available?"
+   
+   This works -- returns EU products with MiFID II citations.
+
+### Manual Setup (Alternative)
+
+```bash
+# Start PostgreSQL
 docker compose up -d postgres
 
-# 3. Backend
+# Backend setup
 cd backend
 pip install -e ".[dev]"
-python -c "from src.config import Settings; print('Config OK')"
-
-# 4. Seed database
 psql -h localhost -U finadvisor -d finadvisor -f db/schema.sql
-python scripts/generate_corpus.py
 python scripts/ingest.py
-
-# 5. Run backend
 uvicorn src.main:app --reload
 
-# 6. Frontend (new terminal)
+# Frontend (new terminal)
 cd frontend
 npm install
 npm run dev
 
-# 7. Open browser at http://localhost:3000
+# Open http://localhost:3000
 ```
 
 ### Key Commands
@@ -135,6 +165,10 @@ docker compose -f langfuse/docker-compose.langfuse.yml up -d
 # Frontend lint + build
 cd frontend
 npm run lint && npm run build
+
+# Stop everything
+# Ctrl+C in the finadvisor terminal, then:
+docker compose down
 ```
 
 ## Project Structure
