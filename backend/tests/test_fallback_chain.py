@@ -53,7 +53,7 @@ async def test_primary_provider_success() -> None:
 
 @pytest.mark.asyncio
 async def test_fallback_transparent_to_agent() -> None:
-    """LiteLLM handles fallback internally — agent sees a normal response regardless of which provider served it."""
+    """LiteLLM handles fallback internally — agent sees a normal response."""
     client = AsyncMock()
     client.messages.create = AsyncMock(
         return_value=_mock_response("Response from fallback provider.")

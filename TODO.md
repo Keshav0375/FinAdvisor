@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **66%** | Remaining: **34%** | Current Phase: **5**
+> Completed: **68%** | Remaining: **32%** | Current Phase: **6**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -550,7 +550,7 @@ through Kong, rate-limit header presence). Live Docker verification deferred. 67
 
 ## Phase 6 — FastAPI Backend & SSE Streaming (10%)
 
-### [ ] 6.1 — App factory + health endpoint (2%)
+### [x] 6.1 — App factory + health endpoint (2%)
 
 Create `backend/src/main.py`: FastAPI app factory with lifespan (DB pool, LangFuse, embeddings).
 Create `backend/src/api/router.py`: main router.
@@ -563,7 +563,13 @@ Create `backend/Dockerfile`.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Enhanced main.py with full lifespan: initializes Settings, DB pool (build_engine),
+VoyageEmbeddings, PII redactor (create_redactor), AsyncAnthropic client (pointed at Kong), and
+optional LangFuse (graceful skip if no keys). Created dependencies.py with DI providers:
+get_db_session, get_rls_session (sets RLS context), get_embeddings, get_redactor, get_llm_client,
+get_langfuse, get_agent (assembles ToolRegistry + FinAdvisorAgent). Created api/router.py as
+aggregator. Created backend/Dockerfile (python:3.12-slim, uvicorn). health.py already existed from
+3.2. All existing tests pass unchanged (67 passed, 2 skipped). Docker verification deferred.
 ```
 
 ### [ ] 6.2 — SSE streaming endpoint (4%)
@@ -835,3 +841,4 @@ Notes:
 | 2026-05-17 | 5.1 | LiteLLM proxy: config.yaml (3 models, fallback chain, circuit breaker), Dockerfile |
 | 2026-05-17 | 5.2 | Kong gateway: kong.yml (rate-limit, request-size, http-log), Dockerfile, DB-less mode |
 | 2026-05-17 | 5.3 | Fallback chain: 5 unit tests (error propagation, circuit breaker), live script |
+| 2026-05-17 | 6.1 | App factory: lifespan (DB, embeddings, LLM, PII, LangFuse), DI providers, Dockerfile |
