@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+
+class FinAdvisorError(Exception): ...
+
+
+class AuthorizationError(FinAdvisorError): ...
+
+
+class RetrievalError(FinAdvisorError): ...
+
+
+class ToolExecutionError(FinAdvisorError): ...
+
+
+class EvalThresholdError(FinAdvisorError): ...

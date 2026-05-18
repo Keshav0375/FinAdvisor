@@ -8,17 +8,28 @@ from typing import Any
 import anthropic
 import structlog
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from src.config import Settings
 from src.db.session import build_engine
+from src.errors import AuthorizationError, FinAdvisorError, RetrievalError, ToolExecutionError
+from src.observability.logging import RequestContextMiddleware, configure_logging
 from src.pii import create_redactor
 from src.retrieval.embeddings import VoyageEmbeddings
 
 log = structlog.get_logger()
 
+_ERROR_STATUS_MAP: dict[type[FinAdvisorError], int] = {
+    AuthorizationError: 403,
+    RetrievalError: 502,
+    ToolExecutionError: 500,
+}
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    configure_logging(json_output=True)
+
     settings = Settings()
     app.state.settings = settings
 
@@ -65,13 +76,49 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="FinAdvisor API", lifespan=lifespan)
 
+    app.add_middleware(RequestContextMiddleware)
     app.middleware("http")(request_logging_middleware)
+
+    app.add_exception_handler(FinAdvisorError, finadvisor_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
 
     from src.api.router import api_router
 
     app.include_router(api_router, prefix="/api")
 
     return app
+
+
+async def finadvisor_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, FinAdvisorError)
+    status = _ERROR_STATUS_MAP.get(type(exc), 500)
+
+    log.error(
+        "finadvisor_error",
+        error_type=type(exc).__name__,
+        detail=str(exc),
+        path=request.url.path,
+    )
+
+    return JSONResponse(
+        status_code=status,
+        content={"error": type(exc).__name__, "detail": str(exc)},
+    )
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    log.error(
+        "unhandled_error",
+        error_type=type(exc).__name__,
+        detail=str(exc),
+        path=request.url.path,
+        exc_info=True,
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={"error": "InternalServerError", "detail": "An unexpected error occurred."},
+    )
 
 
 async def request_logging_middleware(
@@ -81,7 +128,22 @@ async def request_logging_middleware(
     start = time.perf_counter()
     user_id = request.headers.get("X-User-Id", "anonymous")
 
-    response: Response = await call_next(request)
+    try:
+        response: Response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - start) * 1000
+        log.error(
+            "unhandled_error",
+            method=request.method,
+            path=request.url.path,
+            duration_ms=round(duration_ms, 1),
+            user_id=user_id,
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"error": "InternalServerError", "detail": "An unexpected error occurred."},
+        )
 
     duration_ms = (time.perf_counter() - start) * 1000
     log.info(
