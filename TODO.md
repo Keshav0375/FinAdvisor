@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **78%** | Remaining: **22%** | Current Phase: **7**
+> Completed: **82%** | Remaining: **18%** | Current Phase: **7**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -663,7 +663,7 @@ Notes:
 - Build passes, ESLint clean, dev server verified at localhost:3000
 ```
 
-### [ ] 7.2 — Chat interface + SSE streaming (4%)
+### [x] 7.2 — Chat interface + SSE streaming (4%)
 
 Create `frontend/src/components/ChatWindow.tsx`: message list + input.
 Create `frontend/src/components/MessageBubble.tsx`: renders single message.
@@ -676,7 +676,14 @@ Create `frontend/src/lib/api.ts`: API client with X-User-Id header.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Built full chat interface with SSE streaming.
+- lib/api.ts: streamChat() with ReadableStream SSE parsing, X-User-Id header
+- hooks/useChat.ts: zustand-style hook with message state, tool calls, citations, streaming
+- components/ChatWindow.tsx: message list + input form, auto-scroll, clear button
+- components/MessageBubble.tsx: user/assistant bubbles, tool call indicators, error display
+- components/StreamingText.tsx: animated cursor during streaming
+- page.tsx: wired ChatWindow as home page
+- ESLint clean, build passes, dev server renders chat interface
 ```
 
 ### [ ] 7.3 — Citation system (3%)
@@ -870,3 +877,4 @@ Notes:
 | 2026-05-17 | 6.3 | Structured logging: structlog JSON config, error hierarchy, global exception handler, 11 tests |
 | 2026-05-17 | 6.4 | Integration test suite: 9 E2E tests, conftest fixtures, SSE stream parsing, 94 total tests |
 | 2026-05-17 | 7.1 | Layout + UserSwitcher: zustand store, localStorage persistence, Header, 4 mock users |
+| 2026-05-17 | 7.2 | Chat interface: ChatWindow, MessageBubble, StreamingText, useChat hook, SSE API client |
