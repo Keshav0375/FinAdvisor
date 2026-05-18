@@ -1,16 +1,41 @@
 name: Eval Gate
 
-# Activated in Phase 8 — currently a placeholder.
-# Will run the golden Q&A eval set against the agent and enforce
-# citation_accuracy >= 95% and faithfulness >= 90%.
-
 on:
   pull_request:
     branches: [main]
 
 jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Typecheck
+        run: mypy src/
+
+      - name: Unit tests
+        run: pytest tests/ -x --tb=short
+
   eval-gate:
-    if: false  # Disabled until Phase 8
+    needs: lint-and-test
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -41,28 +66,42 @@ jobs:
 
       - name: Setup DB and seed eval data
         run: |
-          psql -h localhost -U test -d finadvisor_test -f backend/db/schema.sql
-          python backend/scripts/ingest.py --target test
+          psql -h localhost -U test -d finadvisor_test -f db/schema.sql
+          python scripts/ingest.py --target test
+        working-directory: backend
         env:
           PGPASSWORD: test
 
-      - name: Run eval set
+      - name: Start backend
         run: |
-          python backend/scripts/run_eval.py \
-            --eval-set data/eval/golden_qa.json \
-            --output eval_results.json
+          uvicorn src.main:app --host 0.0.0.0 --port 8000 &
+          sleep 5
+        working-directory: backend
         env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/finadvisor_test
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+
+      - name: Run eval set
+        run: |
+          python scripts/run_eval.py \
+            --eval-set ../data/eval/golden_qa.json \
+            --output ../eval_results.json \
+            --api-base http://localhost:8000
+        working-directory: backend
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Check thresholds
         run: |
           python -c "
           import json, sys
           results = json.load(open('eval_results.json'))
-          faith = results['avg_faithfulness']
-          cite = results['avg_citation_accuracy']
+          agg = results['aggregate']
+          faith = agg['avg_faithfulness']
+          cite = agg['avg_citation_accuracy']
           print(f'Faithfulness: {faith:.2%}')
           print(f'Citation accuracy: {cite:.2%}')
           if cite < 0.95:
@@ -75,6 +114,7 @@ jobs:
           "
 
       - name: Upload results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eval-results

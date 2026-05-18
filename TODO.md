@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **94%** | Remaining: **6%** | Current Phase: **9**
+> Completed: **96%** | Remaining: **4%** | Current Phase: **9**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -822,7 +822,7 @@ Notes:
 
 ## Phase 9 — CI/CD Eval Gates + Terraform + Polish (6%)
 
-### [ ] 9.1 — GitHub Actions eval gate (2%)
+### [x] 9.1 — GitHub Actions eval gate (2%)
 
 Activate `.github/workflows/eval-gate.yml`:
 - Spin up pgvector service container
@@ -836,7 +836,15 @@ Activate `.github/workflows/eval-gate.yml`:
 ```
 Notes:
 ─────
-(pending)
+2026-05-18: Activated eval-gate.yml workflow.
+- Removed `if: false` guard to enable the workflow
+- Added lint-and-test job: ruff check, ruff format --check, mypy, pytest -x
+- eval-gate job depends on lint-and-test, runs with pgvector service container
+- Starts backend with uvicorn, runs run_eval.py against live API
+- Threshold check reads from aggregate key (matching run_eval.py output format)
+- Upload results as artifact with `if: always()` so results persist on failure
+- YAML syntax validated locally
+- Full CI verification deferred (requires GitHub PR to trigger workflow)
 ```
 
 ### [ ] 9.2 — Terraform IaC (3%)
@@ -928,3 +936,4 @@ Notes:
 | 2026-05-17 | 8.1 | LangFuse integration: TracingContext, prompt versioning, standalone compose, 12 tests |
 | 2026-05-17 | 8.2 | Golden Q&A eval set: 50 entries (5 categories, 4 users), judge prompt, human-approved |
 | 2026-05-17 | 8.3 | Eval runner: run_eval.py with LLM-as-judge, baseline comparison, threshold gates, 14 tests |
+| 2026-05-18 | 9.1 | GitHub Actions eval gate: activated workflow, lint-and-test + eval-gate jobs, threshold checks |
