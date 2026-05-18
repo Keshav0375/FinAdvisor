@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **89%** | Remaining: **11%** | Current Phase: **8**
+> Completed: **91%** | Remaining: **9%** | Current Phase: **8**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -763,7 +763,7 @@ Notes:
 - Docker verification deferred (Docker Desktop not available on this machine)
 ```
 
-### [ ] 8.2 — Golden Q&A eval set (2%)
+### [x] 8.2 — Golden Q&A eval set (2%)
 
 Create `data/eval/golden_qa.json`: 50 Q&A pairs covering:
 - Product suitability (15), jurisdiction scoping (10), refusal scenarios (10),
@@ -778,7 +778,16 @@ expected_behavior, must_cite_refs, must_not_contain, expected_tool_calls.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Golden Q&A eval set created with 50 entries.
+- golden_qa.json: 15 product_suitability, 10 jurisdiction_scoping, 10 refusal,
+  10 citation_accuracy, 5 stale_doc_handling. All 4 user profiles covered.
+  Each entry has: id, category, user_profile, question, expected_behavior,
+  must_cite_refs, must_not_contain, expected_tool_calls.
+- judge_prompt.txt: LLM-as-judge scoring on 3 dimensions (faithfulness,
+  citation_accuracy, refusal_correctness) with JSON-only output format.
+- Coverage: all jurisdictions (US/EU/UK), all tiers (1-4), dual-jurisdiction,
+  PII refusal, scope refusal, stale docs, regulatory refs (FINRA, MiFID, FCA, etc.)
+- Human approval: granted.
 ```
 
 ### [ ] 8.3 — Eval runner script (3%)
@@ -906,3 +915,4 @@ Notes:
 | 2026-05-17 | 7.3 | Citation system: CitationInline, CitationPanel, StaleBadge, [N] parser, inline rendering |
 | 2026-05-17 | 7.4 | UI polish: professional styling, responsive layout, animations, loading states |
 | 2026-05-17 | 8.1 | LangFuse integration: TracingContext, prompt versioning, standalone compose, 12 tests |
+| 2026-05-17 | 8.2 | Golden Q&A eval set: 50 entries (5 categories, 4 users), judge prompt, human-approved |
