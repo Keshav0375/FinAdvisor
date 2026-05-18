@@ -1,7 +1,8 @@
 "use client";
 
-import { StreamingText } from "@/components/StreamingText";
+import { CitationInline } from "@/components/CitationInline";
 import type { Message } from "@/hooks/useChat";
+import { parseCitations } from "@/lib/parseCitations";
 
 interface MessageBubbleProps {
   message: Message;
@@ -9,6 +10,9 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
+
+  const segments = parseCitations(message.content);
+  const citationMap = new Map(message.citations.map((c) => [c.index, c]));
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -37,10 +41,26 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           <p className="text-sm text-red-500">{message.error}</p>
         ) : (
           <div className="whitespace-pre-wrap text-sm leading-relaxed">
-            <StreamingText
-              content={message.content}
-              isStreaming={message.isStreaming}
-            />
+            {isUser ? (
+              message.content
+            ) : (
+              <>
+                {segments.map((seg, i) =>
+                  seg.type === "text" ? (
+                    <span key={i}>{seg.content}</span>
+                  ) : (
+                    <CitationInline
+                      key={i}
+                      index={seg.index}
+                      citation={citationMap.get(seg.index)}
+                    />
+                  )
+                )}
+                {message.isStreaming && (
+                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-gray-400" />
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

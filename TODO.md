@@ -1,7 +1,7 @@
 # FinAdvisor — TODO Tracker
 
 > **Total effort = 100%.** Each task = 1–5% of interview-ready MVP.
-> Completed: **82%** | Remaining: **18%** | Current Phase: **7**
+> Completed: **85%** | Remaining: **15%** | Current Phase: **7**
 >
 > This file is the execution plan. ARCHITECTURE.md is the design bible.
 > Update this file after every task completion with `[x]`, date, and notes.
@@ -686,7 +686,7 @@ Notes:
 - ESLint clean, build passes, dev server renders chat interface
 ```
 
-### [ ] 7.3 — Citation system (3%)
+### [x] 7.3 — Citation system (3%)
 
 Create `frontend/src/components/CitationInline.tsx`: clickable [N] badges.
 Create `frontend/src/components/CitationPanel.tsx`: expanded citation view
@@ -699,7 +699,14 @@ Parse `[N]` markers in message text, replace with interactive components.
 ```
 Notes:
 ─────
-(pending)
+2026-05-17: Built citation system with inline badges and expandable panels.
+- lib/parseCitations.ts: regex parser splits text into text/citation segments
+- components/CitationInline.tsx: clickable [N] badges with toggle expand
+- components/CitationPanel.tsx: expanded view with title, regulatory ref, review date
+- components/StaleBadge.tsx: orange "STALE" badge for docs >12 months old
+- Updated MessageBubble to render citation segments inline
+- Fixed matchAll incompatibility with tsconfig target (used exec loop)
+- ESLint clean, build passes
 ```
 
 ### [ ] 7.4 — UI polish + responsive design (1%)
@@ -878,3 +885,4 @@ Notes:
 | 2026-05-17 | 6.4 | Integration test suite: 9 E2E tests, conftest fixtures, SSE stream parsing, 94 total tests |
 | 2026-05-17 | 7.1 | Layout + UserSwitcher: zustand store, localStorage persistence, Header, 4 mock users |
 | 2026-05-17 | 7.2 | Chat interface: ChatWindow, MessageBubble, StreamingText, useChat hook, SSE API client |
+| 2026-05-17 | 7.3 | Citation system: CitationInline, CitationPanel, StaleBadge, [N] parser, inline rendering |
