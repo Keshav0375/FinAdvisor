@@ -12,7 +12,7 @@ build/
 pip-log.txt
 .installed.cfg
 MANIFEST
-
+graphify-out/
 # Virtual environments
 .venv/
 venv/
