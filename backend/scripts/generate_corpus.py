@@ -708,11 +708,7 @@ async def main() -> None:
         return
 
     settings = Settings()
-    if not settings.anthropic_api_key:
-        log.error("ANTHROPIC_API_KEY not set")
-        sys.exit(1)
-
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value())
     generated = 0
     errors = 0
 

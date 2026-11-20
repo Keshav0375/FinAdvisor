@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import sys
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -174,7 +173,7 @@ async def ingest(
         )
         return
 
-    embedding_client = VoyageEmbeddings(api_key=settings.voyage_api_key)
+    embedding_client = VoyageEmbeddings(api_key=settings.voyage_api_key.get_secret_value())
     chunk_texts = [c["content"] for c in all_chunks]
 
     estimated_tokens = sum(len(t.split()) * 1.3 for t in chunk_texts)
@@ -193,9 +192,11 @@ async def ingest(
     for i, emb in enumerate(embeddings):
         all_chunks[i]["embedding"] = str(emb)
 
-    db_url = settings.database_url
-    if target == "test":
-        db_url = db_url.replace("/finadvisor", "/finadvisor_test")
+    db_url = (
+        settings.database_dsn_for(f"{settings.db_name}_test")
+        if target == "test"
+        else settings.database_dsn
+    )
 
     engine = create_async_engine(db_url, echo=False)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -254,10 +255,6 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = Settings()
-
-    if not args.dry_run and not settings.voyage_api_key:
-        log.error("missing_voyage_api_key")
-        sys.exit(1)
 
     asyncio.run(ingest(settings, dry_run=args.dry_run, target=args.target))
 

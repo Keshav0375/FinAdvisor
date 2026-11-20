@@ -15,6 +15,19 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 CORPUS_DIR = PROJECT_ROOT / "data" / "corpus"
 
+# Keys Settings requires at boot (see src/config.py); checked early for a friendlier message.
+REQUIRED_ENV_KEYS = (
+    "DB_HOST",
+    "DB_NAME",
+    "DB_USER",
+    "DB_PASSWORD",
+    "DB_POOL_SIZE",
+    "DB_STATEMENT_TIMEOUT_MS",
+    "ANTHROPIC_API_KEY",
+    "VOYAGE_API_KEY",
+    "JWT_SECRET",
+)
+
 BANNER = """
 ====================================================
   FinAdvisor — Compliance-Aware Wealth Advisor
@@ -102,18 +115,12 @@ def check_env() -> dict[str, str]:
     if not env_file.exists():
         _error(
             f".env not found at {env_file}\n"
-            "           Create backend/.env with at minimum:\n"
-            "             ANTHROPIC_API_KEY=sk-ant-...\n"
-            "             VOYAGE_API_KEY=pa-..."
+            "           Copy .env.example to backend/.env and replace every REPLACE_ME."
         )
         sys.exit(1)
 
     env_vars = _read_env_file()
-    missing = []
-    if not env_vars.get("ANTHROPIC_API_KEY"):
-        missing.append("ANTHROPIC_API_KEY")
-    if not env_vars.get("VOYAGE_API_KEY"):
-        missing.append("VOYAGE_API_KEY")
+    missing = [key for key in REQUIRED_ENV_KEYS if not env_vars.get(key)]
 
     if missing:
         _error(
@@ -231,7 +238,6 @@ def ensure_data_ingested() -> None:
 def start_backend(env_vars: dict[str, str]) -> subprocess.Popen[bytes]:
     _print("Starting backend on http://localhost:8000 ...")
     env = os.environ.copy()
-    env["LLM_BASE_URL"] = "https://api.anthropic.com"
     env["ANTHROPIC_API_KEY"] = env_vars["ANTHROPIC_API_KEY"]
     return subprocess.Popen(
         [

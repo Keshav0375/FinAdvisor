@@ -2,16 +2,16 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_DB: finadvisor
-      POSTGRES_USER: finadvisor
-      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: ${DB_NAME:?set DB_NAME in .env}
+      POSTGRES_USER: ${DB_USER:?set DB_USER in .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U finadvisor"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,14 +21,18 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://finadvisor:localdev@postgres:5432/finadvisor
-      KONG_URL: http://kong:8000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:?set DB_NAME in .env}
+      DB_USER: ${DB_USER:?set DB_USER in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:?set DB_POOL_SIZE in .env}
+      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:?set DB_STATEMENT_TIMEOUT_MS in .env}
       LANGFUSE_HOST: http://langfuse:3000
-      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:?set VOYAGE_API_KEY in .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
       PII_MODE: regex
-      JWT_SECRET: ${JWT_SECRET:-local-dev-secret}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     depends_on:
       postgres:
         condition: service_healthy

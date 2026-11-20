@@ -14,6 +14,7 @@ Tests:
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from typing import Any
 
@@ -24,6 +25,8 @@ log = structlog.get_logger()
 
 KONG_URL = "http://localhost:8001"
 LITELLM_URL = "http://localhost:4000"
+# Dev-only script for the LiteLLM stack E0-T6 removes; the key comes from the environment.
+LITELLM_MASTER_KEY = os.environ.get("LITELLM_MASTER_KEY", "")
 
 
 async def check_litellm_health() -> bool:
@@ -50,7 +53,7 @@ async def test_primary_route() -> bool:
                 headers={
                     "X-User-Id": "sarah_chen",
                     "Content-Type": "application/json",
-                    "Authorization": "Bearer sk-litellm-local",
+                    "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
                 },
                 timeout=30.0,
             )
@@ -79,7 +82,7 @@ async def test_rate_limit_headers() -> bool:
                 headers={
                     "X-User-Id": "test_rate_limit",
                     "Content-Type": "application/json",
-                    "Authorization": "Bearer sk-litellm-local",
+                    "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
                 },
                 timeout=30.0,
             )

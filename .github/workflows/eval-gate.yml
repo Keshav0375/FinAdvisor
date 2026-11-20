@@ -71,6 +71,16 @@ jobs:
         working-directory: backend
         env:
           PGPASSWORD: test
+          # --target test appends _test to DB_NAME, so this ingests into finadvisor_test.
+          DB_HOST: localhost
+          DB_NAME: finadvisor
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_POOL_SIZE: "5"
+          DB_STATEMENT_TIMEOUT_MS: "30000"
+          JWT_SECRET: eval-gate-unused-jwt-secret-0123456789
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
 
       - name: Start backend
         run: |
@@ -78,9 +88,17 @@ jobs:
           sleep 5
         working-directory: backend
         env:
-          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/finadvisor_test
+          DB_HOST: localhost
+          DB_NAME: finadvisor_test
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_POOL_SIZE: "5"
+          DB_STATEMENT_TIMEOUT_MS: "30000"
+          JWT_SECRET: eval-gate-unused-jwt-secret-0123456789
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+          LANGFUSE_ENABLED: "true"
+          LANGFUSE_HOST: ${{ vars.LANGFUSE_HOST || 'https://cloud.langfuse.com' }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
 

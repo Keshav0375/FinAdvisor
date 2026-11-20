@@ -34,29 +34,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.settings = settings
 
     app.state.db = build_engine(settings)
-    log.info("db_pool_initialized", url=settings.database_url.split("@")[-1])
+    log.info(
+        "db_pool_initialized",
+        host=settings.db_host,
+        port=settings.db_port,
+        database=settings.db_name,
+        pool_size=settings.db_pool_size,
+    )
 
-    app.state.embeddings = VoyageEmbeddings(api_key=settings.voyage_api_key)
+    app.state.embeddings = VoyageEmbeddings(api_key=settings.voyage_api_key.get_secret_value())
     log.info("embeddings_initialized", model="voyage-3")
 
     app.state.redactor = create_redactor(settings)
     log.info("pii_redactor_initialized", mode=settings.pii_mode)
 
-    llm_base = settings.llm_base_url or f"{settings.kong_url}/v1"
-    llm_key = settings.anthropic_api_key if settings.llm_base_url else settings.litellm_master_key
+    # ASSUMPTION: the client uses ANTHROPIC_BASE_URL and the API key now; E0-T6 moves the
+    # call sites onto the LLM_MODEL_* keys and removes LiteLLM.
     app.state.llm_client = anthropic.AsyncAnthropic(
-        api_key=llm_key,
-        base_url=llm_base,
+        api_key=settings.anthropic_api_key.get_secret_value(),
+        base_url=settings.anthropic_base_url,
     )
-    log.info("llm_client_initialized", base_url=llm_base)
+    log.info("llm_client_initialized", base_url=settings.anthropic_base_url)
 
-    if settings.langfuse_public_key and settings.langfuse_secret_key:
+    if (
+        settings.langfuse_enabled
+        and settings.langfuse_host
+        and settings.langfuse_public_key
+        and settings.langfuse_secret_key
+    ):
         try:
             from langfuse import Langfuse
 
             app.state.langfuse = Langfuse(
                 public_key=settings.langfuse_public_key,
-                secret_key=settings.langfuse_secret_key,
+                secret_key=settings.langfuse_secret_key.get_secret_value(),
                 host=settings.langfuse_host,
             )
             log.info("langfuse_initialized", host=settings.langfuse_host)
@@ -65,7 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             app.state.langfuse = None
     else:
         app.state.langfuse = None
-        log.info("langfuse_skipped", reason="no keys configured")
+        log.info("langfuse_skipped", reason="LANGFUSE_ENABLED is false")
 
     log.info("app_startup_complete")
     yield
