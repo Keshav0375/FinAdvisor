@@ -6,6 +6,13 @@ from urllib.parse import quote
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Values that mean "not filled in". Compared case-insensitively against the stripped secret.
+# REPLACE_ME is the placeholder used by .env.example.
+PLACEHOLDER_SECRETS = frozenset({"replace_me", "changeme", "change-me", "placeholder", "xxx"})
+
+# Security floor for the JWT signing secret; not an operator knob.
+JWT_SECRET_MIN_LENGTH = 32
+
 
 def _env(name: str, **kwargs: Any) -> Any:
     """Field read from the upper-case environment variable `name`; errors name that variable."""
@@ -72,8 +79,18 @@ class Settings(BaseSettings):
     )
     @classmethod
     def _secret_not_blank(cls, value: SecretStr) -> SecretStr:
-        if not value.get_secret_value().strip():
+        secret = value.get_secret_value().strip()
+        if not secret:
             raise ValueError("must not be empty")
+        if secret.lower() in PLACEHOLDER_SECRETS:
+            raise ValueError("is still a placeholder; set a real value")
+        return value
+
+    @field_validator("jwt_secret", mode="after")
+    @classmethod
+    def _jwt_secret_long_enough(cls, value: SecretStr) -> SecretStr:
+        if len(value.get_secret_value()) < JWT_SECRET_MIN_LENGTH:
+            raise ValueError(f"must be at least {JWT_SECRET_MIN_LENGTH} characters")
         return value
 
     @model_validator(mode="after")

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from src.config import Settings
+from src.config import JWT_SECRET_MIN_LENGTH, PLACEHOLDER_SECRETS, Settings
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -52,6 +52,47 @@ class TestRequiredKeys:
         with pytest.raises(ValidationError) as exc:
             build()
         assert key in str(exc.value)
+
+    @pytest.mark.parametrize("key", SECRET_KEYS)
+    @pytest.mark.parametrize(
+        "placeholder", ["REPLACE_ME", "changeme", "Change-Me", "PLACEHOLDER", "xxx", " XXX "]
+    )
+    def test_placeholder_secret_rejected(
+        self, monkeypatch: pytest.MonkeyPatch, key: str, placeholder: str
+    ) -> None:
+        monkeypatch.setenv(key, placeholder)
+        with pytest.raises(ValidationError) as exc:
+            build()
+        message = str(exc.value)
+        assert key in message
+        assert "placeholder" in message
+        assert placeholder.strip() not in message
+
+    def test_env_example_placeholder_rejected_for_every_secret(self) -> None:
+        example = (BACKEND_DIR.parent / ".env.example").read_text(encoding="utf-8")
+        values = dict(
+            line.split("=", 1) for line in example.splitlines() if "=" in line and line[0] != "#"
+        )
+        for key in SECRET_KEYS:
+            assert values[key].strip().lower() in PLACEHOLDER_SECRETS
+
+    def test_jwt_secret_too_short_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        short = "s" * (JWT_SECRET_MIN_LENGTH - 1)
+        monkeypatch.setenv("JWT_SECRET", short)
+        with pytest.raises(ValidationError) as exc:
+            build()
+        message = str(exc.value)
+        assert "JWT_SECRET" in message
+        assert str(JWT_SECRET_MIN_LENGTH) in message
+        assert short not in message
+
+    def test_jwt_secret_at_minimum_length_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JWT_SECRET", "s" * JWT_SECRET_MIN_LENGTH)
+        assert build().jwt_secret.get_secret_value() == "s" * JWT_SECRET_MIN_LENGTH
+
+    def test_short_other_secrets_still_ok(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DB_PASSWORD", "x")
+        assert build().db_password.get_secret_value() == "x"
 
     @pytest.mark.parametrize("key", ["DB_POOL_SIZE", "DB_STATEMENT_TIMEOUT_MS"])
     def test_non_positive_int_rejected(self, monkeypatch: pytest.MonkeyPatch, key: str) -> None:

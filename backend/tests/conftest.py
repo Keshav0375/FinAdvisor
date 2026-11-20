@@ -25,7 +25,7 @@ TEST_ENV: dict[str, str] = {
     "DB_STATEMENT_TIMEOUT_MS": "30000",
     "ANTHROPIC_API_KEY": "unit-anthropic-key",
     "VOYAGE_API_KEY": "unit-voyage-key",
-    "JWT_SECRET": "unit-jwt-secret",
+    "JWT_SECRET": "unit-jwt-secret-0123456789-abcdefghij",
 }
 
 # DB-backed tests run only when TEST_DATABASE_URL points at a reachable Postgres.
