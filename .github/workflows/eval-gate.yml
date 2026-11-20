@@ -78,7 +78,13 @@ jobs:
           sleep 5
         working-directory: backend
         env:
-          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/finadvisor_test
+          DB_HOST: localhost
+          DB_NAME: finadvisor_test
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_POOL_SIZE: "5"
+          DB_STATEMENT_TIMEOUT_MS: "30000"
+          JWT_SECRET: eval-gate-unused-jwt
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}

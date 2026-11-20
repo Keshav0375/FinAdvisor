@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import date
@@ -14,7 +15,21 @@ from src.auth.models import UserClaims
 from src.db.models import Base
 from src.main import app
 
-TEST_DATABASE_URL = "postgresql+asyncpg://finadvisor:localdev@localhost:5432/finadvisor"
+# Dummy, non-secret-looking values for every required Settings key. Real values never live in code.
+TEST_ENV: dict[str, str] = {
+    "DB_HOST": "db.test.invalid",
+    "DB_NAME": "finadvisor_unit",
+    "DB_USER": "unit_user",
+    "DB_PASSWORD": "unit-db-pass",
+    "DB_POOL_SIZE": "5",
+    "DB_STATEMENT_TIMEOUT_MS": "30000",
+    "ANTHROPIC_API_KEY": "unit-anthropic-key",
+    "VOYAGE_API_KEY": "unit-voyage-key",
+    "JWT_SECRET": "unit-jwt-secret",
+}
+
+# DB-backed tests run only when TEST_DATABASE_URL points at a reachable Postgres.
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
 
 SEED_CONTENT_PREFIX = "__TEST_SEED__"
 
@@ -23,6 +38,8 @@ def can_connect_to_db() -> bool:
     import asyncio
 
     async def _check() -> bool:
+        if not TEST_DATABASE_URL:
+            return False
         try:
             engine = create_async_engine(TEST_DATABASE_URL)
             async with engine.connect() as conn:
@@ -37,8 +54,22 @@ def can_connect_to_db() -> bool:
 
 requires_db = pytest.mark.skipif(
     not can_connect_to_db(),
-    reason="PostgreSQL not available at localhost:5432",
+    reason="PostgreSQL not reachable: set TEST_DATABASE_URL to a running database",
 )
+
+
+@pytest.fixture(autouse=True)
+def settings_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """Give every test a valid, isolated Settings environment (no ambient or .env values)."""
+    from src.config import Settings
+
+    for field in Settings.model_fields.values():
+        alias = field.validation_alias
+        if isinstance(alias, str):
+            monkeypatch.delenv(alias, raising=False)
+    for key, value in TEST_ENV.items():
+        monkeypatch.setenv(key, value)
+    return dict(TEST_ENV)
 
 
 @pytest.fixture
