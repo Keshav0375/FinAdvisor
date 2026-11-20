@@ -12,11 +12,7 @@ graph TB
     Frontend --> Backend[FastAPI :8000]
     Backend --> Agent[Agent Orchestrator]
     Agent --> PGVector[(PostgreSQL + pgvector :5432)]
-    Agent --> Kong[Kong Gateway :8001]
-    Kong --> LiteLLM[LiteLLM Proxy :4000]
-    LiteLLM --> Claude[Claude Sonnet]
-    LiteLLM --> GPT4o[GPT-4o Fallback]
-    LiteLLM --> Gemini[Gemini Fallback]
+    Agent --> Claude[Anthropic API]
     Backend --> LangFuse[LangFuse :3030]
     LangFuse --> LangFuseDB[(LangFuse DB :5433)]
     PGVector --> RLS{RLS Policies}
@@ -40,9 +36,7 @@ User (browser)
     -> FastAPI (:8000) -- JWT verify, audit log, SSE endpoint
       -> Agent Orchestrator -- ReAct loop, tool calls
         -> pgvector (RLS-filtered similarity search)
-        -> Kong (:8001) -- token budget, rate limiting
-          -> LiteLLM (:4000) -- model routing + fallback
-            -> Claude / GPT-4o / Gemini
+        -> Anthropic API (ANTHROPIC_BASE_URL) -- model ids from Settings
       -> LangFuse (:3030) -- trace emitted per turn
 ```
 
@@ -54,7 +48,7 @@ User (browser)
 | Database | PostgreSQL 16 + pgvector (1024-dim, RLS) |
 | Embeddings | Voyage AI (voyage-3) |
 | Agent | Anthropic SDK (ReAct loop, 4 tools) |
-| LLM Gateway | LiteLLM + Kong (rate limit, fallback chain) |
+| LLM access | Anthropic API direct (Kong gateway returns in E2) |
 | Observability | LangFuse (self-hosted, trace per query) |
 | Frontend | Next.js 14, Tailwind CSS, zustand |
 | IaC | Terraform (GCP Cloud Run, Cloud SQL) |
@@ -67,7 +61,7 @@ User (browser)
 - **Stale Document Warnings** -- Documents older than 12 months get an orange "STALE" badge in the UI.
 - **PII Redaction** -- Ingest pipeline redacts PII before embedding. Output pass catches LLM-hallucinated PII.
 - **Eval Gate** -- 50 golden Q&A pairs scored by LLM-as-judge. CI blocks if citation_accuracy < 95% or faithfulness < 90%.
-- **Fallback Chain** -- Claude -> GPT-4o -> Gemini with circuit breaker pattern via LiteLLM.
+- **Direct Anthropic calls** -- The backend calls Anthropic at `ANTHROPIC_BASE_URL` with model ids from `LLM_MODEL_*` settings. Same-provider fallback arrives in E4 and the Kong gateway in E2.
 
 ## Mock Users
 
@@ -196,8 +190,6 @@ finadvisor/
     corpus/           50 synthetic financial documents
     eval/             50 golden Q&A pairs + judge prompt
   langfuse/           Self-hosted LangFuse compose
-  kong/               API gateway config
-  litellm/            LLM proxy config
 ```
 
 ## Documentation

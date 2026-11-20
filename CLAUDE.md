@@ -12,7 +12,7 @@
 - Database schema (pgvector + RLS policies)
 - Agent orchestrator design (ReAct loop)
 - Tool definitions (Pydantic schemas)
-- LLM routing (LiteLLM + Kong)
+- LLM access (Anthropic direct; Kong returns in E2)
 - Docker Compose topology
 
 **Read TODO.md for current progress.** It tracks what's done, what's next, and verification criteria.
@@ -31,7 +31,7 @@ Changes to this stack require explicit human approval:
 | Database | PostgreSQL + pgvector | 16 |
 | Embeddings | Voyage AI (voyage-3) | 1024 dims |
 | Agent | Anthropic SDK (direct) | latest |
-| LLM Gateway | LiteLLM + Kong | latest |
+| LLM Gateway | None (Anthropic direct); Kong returns in E2 | n/a |
 | Observability | LangFuse (self-hosted) | 2.x |
 | Frontend | Next.js (App Router) | 14 |
 | Styling | Tailwind CSS | 3.x |
@@ -169,7 +169,7 @@ ruff check . --fix && ruff format . && mypy src/ && pytest tests/ -v
 1. Check ARCHITECTURE.md — the answer is usually there
 2. Check TODO.md — verify you're working on the right task
 3. Check the Anthropic SDK docs for agent patterns
-4. Check LiteLLM docs for routing config
+4. Check the Anthropic SDK docs for model, base URL and streaming settings
 5. Ask the user before implementing anything ambiguous
 6. Never guess at financial regulations — use only what's in the synthetic corpus
 

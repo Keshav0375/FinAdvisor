@@ -48,8 +48,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.redactor = create_redactor(settings)
     log.info("pii_redactor_initialized", mode=settings.pii_mode)
 
-    # ASSUMPTION: the client uses ANTHROPIC_BASE_URL and the API key now; E0-T6 moves the
-    # call sites onto the LLM_MODEL_* keys and removes LiteLLM.
     app.state.llm_client = anthropic.AsyncAnthropic(
         api_key=settings.anthropic_api_key.get_secret_value(),
         base_url=settings.anthropic_base_url,

@@ -661,10 +661,11 @@ async def generate_document(
     client: anthropic.AsyncAnthropic,
     spec: dict[str, Any],
     index: int,
+    model: str,
 ) -> dict[str, Any]:
     prompt = get_generation_prompt(spec)
     response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=model,
         max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -708,13 +709,16 @@ async def main() -> None:
         return
 
     settings = Settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    client = anthropic.AsyncAnthropic(
+        api_key=settings.anthropic_api_key.get_secret_value(),
+        base_url=settings.anthropic_base_url,
+    )
     generated = 0
     errors = 0
 
     for i, spec in enumerate(DOCUMENT_SPECS):
         try:
-            doc = await generate_document(client, spec, i)
+            doc = await generate_document(client, spec, i, settings.llm_model_aux)
             doc_type_dir = DOC_TYPE_TO_DIR[spec["doc_type"]]
             output_dir = CORPUS_DIR / doc_type_dir
             output_dir.mkdir(parents=True, exist_ok=True)
