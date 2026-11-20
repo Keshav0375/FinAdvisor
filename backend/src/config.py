@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date
 from typing import Any, Literal
 from urllib.parse import quote, urlsplit
 
@@ -15,6 +17,34 @@ JWT_SECRET_MIN_LENGTH = 32
 
 # Hosts where a plain-http LLM endpoint is allowed (local test servers); security floor, not a knob.
 LOCAL_HTTP_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+MODEL_LIFECYCLE_SOURCE_URL = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
+
+
+@dataclass(frozen=True)
+class ModelLifecycle:
+    model: str
+    deprecated_since: date | None = None
+    retires: date | None = None
+    source: str = MODEL_LIFECYCLE_SOURCE_URL
+
+
+# Allowlist of known model ids for the LLM_MODEL_* settings below (ADR-025 R6: allowlist in
+# config). An id absent from this table is an `unknown` problem (arch 06 section 6.6: unknown ids
+# fail). Dates come from ADR-006 (decision-logs.md, accepted 2026-11-01), not re-verified live;
+# the table is a standing maintenance cost (ADR-006, "Harder later"). The ADR gives no
+# retirement date for claude-haiku-4-5, so it only warns. src/model_lifecycle.py holds the logic.
+LIFECYCLE_TABLE: dict[str, ModelLifecycle] = {
+    row.model: row
+    for row in (
+        ModelLifecycle("claude-sonnet-5-5"),
+        ModelLifecycle("claude-haiku-5-5"),
+        ModelLifecycle("claude-sonnet-4-6"),
+        ModelLifecycle("claude-sonnet-4-5", retires=date(2026, 11, 30)),
+        ModelLifecycle("claude-haiku-4-5", deprecated_since=date(2026, 10, 15)),
+        ModelLifecycle("claude-sonnet-4-20250514", retires=date(2026, 6, 15)),
+    )
+}
 
 
 def _env(name: str, **kwargs: Any) -> Any:
@@ -44,7 +74,7 @@ class Settings(BaseSettings):
     db_pool_size: int = _env("DB_POOL_SIZE", gt=0)
     db_statement_timeout_ms: int = _env("DB_STATEMENT_TIMEOUT_MS", gt=0)
 
-    # LLM
+    # LLM (model ids are checked against LIFECYCLE_TABLE above by src/model_lifecycle.py)
     anthropic_api_key: SecretStr = _env("ANTHROPIC_API_KEY")
     anthropic_base_url: str = _env("ANTHROPIC_BASE_URL", default="https://api.anthropic.com")
     llm_model_answer: str = _env("LLM_MODEL_ANSWER", default="claude-sonnet-5-5")
@@ -53,6 +83,8 @@ class Settings(BaseSettings):
     llm_model_fallback: str = _env("LLM_MODEL_FALLBACK", default="claude-sonnet-4-6")
     llm_fallback_enabled: bool = _env("LLM_FALLBACK_ENABLED", default=False)
     llm_max_iterations: int = _env("LLM_MAX_ITERATIONS", default=3, gt=0)
+    # A model retiring within this many days is reported (arch 06 section 6.6).
+    model_retire_warn_days: int = _env("MODEL_RETIRE_WARN_DAYS", default=30, ge=0)
 
     # Embeddings
     voyage_api_key: SecretStr = _env("VOYAGE_API_KEY")

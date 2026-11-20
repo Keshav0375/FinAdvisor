@@ -57,6 +57,18 @@ requires_db = pytest.mark.skipif(
     reason="PostgreSQL not reachable: set TEST_DATABASE_URL to a running database",
 )
 
+# Tests marked `live` call a real external API (Voyage, Anthropic); they run only on opt-in.
+RUN_LIVE_API_TESTS = os.environ.get("LIVE_API_TESTS", "") == "1"
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if RUN_LIVE_API_TESTS:
+        return
+    skip_live = pytest.mark.skip(reason="live API test; set LIVE_API_TESTS=1 with real keys")
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip_live)
+
 
 @pytest.fixture(autouse=True)
 def settings_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:

@@ -6,6 +6,9 @@ import pytest
 
 from src.retrieval.embeddings import DIMENSIONS, VoyageEmbeddings
 
+# Calls the real Voyage API: skipped unless LIVE_API_TESTS=1 (see conftest).
+pytestmark = pytest.mark.live
+
 VOYAGE_API_KEY = os.environ.get("VOYAGE_API_KEY", "")
 
 requires_voyage = pytest.mark.skipif(
