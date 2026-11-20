@@ -59,10 +59,12 @@ async def get_agent(
     embeddings: VoyageEmbeddings = Depends(get_embeddings),
     client: anthropic.AsyncAnthropic = Depends(get_llm_client),
     langfuse: Any = Depends(get_langfuse),
+    settings: Settings = Depends(get_settings),
 ) -> FinAdvisorAgent:
     tool_registry = ToolRegistry(session=session, embeddings=embeddings)
     return FinAdvisorAgent(
         client=client,
         tool_registry=tool_registry,
+        model=settings.llm_model_answer,
         langfuse=langfuse,
     )

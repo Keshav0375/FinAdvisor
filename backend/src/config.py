@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,6 +12,9 @@ PLACEHOLDER_SECRETS = frozenset({"replace_me", "changeme", "change-me", "placeho
 
 # Security floor for the JWT signing secret; not an operator knob.
 JWT_SECRET_MIN_LENGTH = 32
+
+# Hosts where a plain-http LLM endpoint is allowed (local test servers); security floor, not a knob.
+LOCAL_HTTP_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
 def _env(name: str, **kwargs: Any) -> Any:
@@ -88,6 +91,24 @@ class Settings(BaseSettings):
             raise ValueError("must not be empty")
         if secret.lower() in PLACEHOLDER_SECRETS:
             raise ValueError("is still a placeholder; set a real value")
+        return value
+
+    @field_validator("anthropic_base_url", mode="after")
+    @classmethod
+    def _base_url_safe(cls, value: str) -> str:
+        # The API key is sent to this URL, so it must be https (http only for local servers)
+        # and must not carry credentials. Messages never echo the value.
+        try:
+            parts = urlsplit(value)
+            host = parts.hostname
+        except ValueError:
+            raise ValueError("is not a valid URL") from None
+        if parts.scheme not in ("http", "https") or not host:
+            raise ValueError("must be an absolute http(s) URL")
+        if parts.username is not None or parts.password is not None:
+            raise ValueError("must not contain credentials (userinfo)")
+        if parts.scheme == "http" and host not in LOCAL_HTTP_HOSTS:
+            raise ValueError("must use https (http is allowed only for localhost)")
         return value
 
     @field_validator("jwt_secret", mode="after")

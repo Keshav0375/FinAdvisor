@@ -15,7 +15,6 @@ from .types import StreamEvent, ToolCallEvent
 
 log = structlog.get_logger()
 
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
 MAX_TOKENS = 4096
 
 
@@ -24,8 +23,8 @@ class FinAdvisorAgent:
         self,
         client: anthropic.AsyncAnthropic,
         tool_registry: ToolRegistry,
+        model: str,
         langfuse: Any | None = None,
-        model: str = DEFAULT_MODEL,
     ) -> None:
         self._client = client
         self._tools = tool_registry
