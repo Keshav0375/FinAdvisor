@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:0.8.5-pg16
         env:
           POSTGRES_DB: finadvisor_test
           POSTGRES_USER: test
@@ -68,21 +68,42 @@ jobs:
           --health-retries 5
 
     steps:
+      # The eval needs real API keys. Without them the job skips with a visible notice and
+      # stays green; it runs for real once the repo secrets are added. Keys are never faked.
+      - name: Check secrets
+        id: check-secrets
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$VOYAGE_API_KEY" ]; then
+            echo "::notice::eval-gate skipped: ANTHROPIC_API_KEY/VOYAGE_API_KEY secrets not configured"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+
       - uses: actions/checkout@v4
+        if: steps.check-secrets.outputs.run == 'true'
 
       - name: Setup Python
+        if: steps.check-secrets.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        if: steps.check-secrets.outputs.run == 'true'
+        run: |
+          pip install "poetry==2.1.2"
+          poetry install --with dev --no-interaction
         working-directory: backend
 
       - name: Setup DB and seed eval data
+        if: steps.check-secrets.outputs.run == 'true'
         run: |
           psql -h localhost -U test -d finadvisor_test -f db/schema.sql
-          python scripts/ingest.py --target test
+          poetry run python scripts/ingest.py --target test
         working-directory: backend
         env:
           PGPASSWORD: test
@@ -98,8 +119,9 @@ jobs:
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
 
       - name: Start backend
+        if: steps.check-secrets.outputs.run == 'true'
         run: |
-          uvicorn src.main:app --host 0.0.0.0 --port 8000 &
+          poetry run uvicorn src.main:app --host 0.0.0.0 --port 8000 &
           sleep 5
         working-directory: backend
         env:
@@ -118,8 +140,9 @@ jobs:
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
 
       - name: Run eval set
+        if: steps.check-secrets.outputs.run == 'true'
         run: |
-          python scripts/run_eval.py \
+          poetry run python scripts/run_eval.py \
             --eval-set ../data/eval/golden_qa.json \
             --output ../eval_results.json \
             --api-base http://localhost:8000
@@ -128,10 +151,12 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Check thresholds
+        if: steps.check-secrets.outputs.run == 'true'
+        working-directory: backend
         run: |
-          python -c "
+          poetry run python -c "
           import json, sys
-          results = json.load(open('eval_results.json'))
+          results = json.load(open('../eval_results.json'))
           agg = results['aggregate']
           faith = agg['avg_faithfulness']
           cite = agg['avg_citation_accuracy']
@@ -147,7 +172,7 @@ jobs:
           "
 
       - name: Upload results
-        if: always()
+        if: always() && steps.check-secrets.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: eval-results
