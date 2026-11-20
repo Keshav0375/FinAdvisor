@@ -49,6 +49,7 @@ RUN useradd --system --uid 10001 --no-create-home app
 COPY --from=builder-dev /opt/venv /opt/venv
 COPY --chown=app:app pyproject.toml ./
 COPY --chown=app:app src ./src
+COPY --chown=app:app scripts ./scripts
 COPY --chown=app:app tests ./tests
 USER app
 EXPOSE 8000

@@ -31,6 +31,17 @@ echo "ok: versions match lock ($actual)"
 
 # Dev has pytest, runtime does not.
 docker run --rm "$DEV_TAG" pytest --version >/dev/null || fail "pytest missing in dev"
+
+# The full suite runs in the dev image with no --ignore; a collection error fails the check.
+if ! out="$(docker run --rm "$DEV_TAG" pytest tests/ -p no:cacheprovider 2>&1)"; then
+  echo "$out" >&2
+  if echo "$out" | grep -qE 'error(s)? during collection|ERROR collecting'; then
+    fail "pytest collection error in dev image"
+  fi
+  fail "pytest tests/ failed in dev image"
+fi
+echo "$out" | tail -n 1
+echo "ok: full test suite passes in dev image"
 if docker run --rm "$RUNTIME_TAG" pytest --version >/dev/null 2>&1; then fail "pytest present in runtime"; fi
 echo "ok: pytest in dev only"
 
