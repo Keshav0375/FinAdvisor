@@ -38,7 +38,10 @@ async def test_lifespan_client_uses_configured_base_url_and_key(
 
 
 @pytest.mark.asyncio
-async def test_lifespan_client_defaults_to_direct_anthropic() -> None:
+async def test_lifespan_client_defaults_to_direct_anthropic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     app = await _enter_lifespan()
 
     assert str(app.state.llm_client.base_url).rstrip("/") == "https://api.anthropic.com"
