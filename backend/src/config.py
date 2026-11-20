@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     llm_model_fallback: str = _env("LLM_MODEL_FALLBACK", default="claude-sonnet-4-6")
     llm_fallback_enabled: bool = _env("LLM_FALLBACK_ENABLED", default=False)
     llm_max_iterations: int = _env("LLM_MAX_ITERATIONS", default=3, gt=0)
+    # A model retiring within this many days is reported (arch 06 section 6.6).
+    model_retire_warn_days: int = _env("MODEL_RETIRE_WARN_DAYS", default=30, ge=0)
 
     # Embeddings
     voyage_api_key: SecretStr = _env("VOYAGE_API_KEY")

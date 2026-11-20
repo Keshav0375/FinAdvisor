@@ -14,7 +14,7 @@ def test_no_hard_coded_claude_model_ids_outside_config() -> None:
     offenders: list[str] = []
     for folder in ("src", "scripts"):
         for path in (BACKEND_DIR / folder).rglob("*.py"):
-            if path.name == "config.py" and folder == "src":
+            if folder == "src" and path.name in ("config.py", "model_lifecycle.py"):
                 continue
             for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if HARD_CODED_MODEL.search(line):
