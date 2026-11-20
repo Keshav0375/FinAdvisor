@@ -152,8 +152,10 @@ async def test_judge_response_parses_json() -> None:
         "What is X?",
         "X is Y [1].",
         ["chunk about Y"],
+        model="judge-model-id",
     )
 
+    assert mock_llm.messages.create.await_args.kwargs["model"] == "judge-model-id"
     assert scores["faithfulness"] == 0.95
     assert scores["citation_accuracy"] == 0.90
     assert scores["refusal_correctness"] == 1.0
@@ -164,7 +166,7 @@ async def test_judge_response_handles_error() -> None:
     mock_llm = AsyncMock()
     mock_llm.messages.create = AsyncMock(side_effect=Exception("API error"))
 
-    scores = await judge_response(mock_llm, "prompt", "q", "r", [])
+    scores = await judge_response(mock_llm, "prompt", "q", "r", [], model="judge-model-id")
 
     assert scores["faithfulness"] == 0.0
     assert "Judge error" in scores["reasoning"]
@@ -180,7 +182,7 @@ async def test_judge_response_handles_malformed_json() -> None:
     mock_response.content = [mock_content]
     mock_llm.messages.create = AsyncMock(return_value=mock_response)
 
-    scores = await judge_response(mock_llm, "prompt", "q", "r", [])
+    scores = await judge_response(mock_llm, "prompt", "q", "r", [], model="judge-model-id")
 
     assert scores["faithfulness"] == 0.0
     assert "Failed to parse" in scores["reasoning"]

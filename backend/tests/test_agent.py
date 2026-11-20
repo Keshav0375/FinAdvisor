@@ -10,6 +10,8 @@ from src.agent.types import StreamEvent
 
 from .conftest import SARAH_CHEN
 
+TEST_MODEL = "test-model-id"
+
 
 def _mock_text_block(text: str) -> MagicMock:
     block = MagicMock()
@@ -52,6 +54,7 @@ def _make_agent(client: AsyncMock) -> tuple[FinAdvisorAgent, AsyncMock]:
     agent = FinAdvisorAgent(
         client=client,
         tool_registry=registry,
+        model=TEST_MODEL,
     )
     return agent, registry
 
@@ -176,6 +179,7 @@ async def test_langfuse_trace_integration() -> None:
         client=client,
         tool_registry=registry,
         langfuse=mock_langfuse,
+        model=TEST_MODEL,
     )
 
     events: list[StreamEvent] = []
@@ -235,3 +239,34 @@ def test_system_prompt_content() -> None:
 
 def test_system_prompt_version() -> None:
     assert SYSTEM_PROMPT_VERSION == "1.0.0"
+
+
+@pytest.mark.asyncio
+async def test_agent_sends_configured_answer_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """get_agent wires settings.llm_model_answer into the model sent to the Anthropic client."""
+    from src.config import Settings
+    from src.dependencies import get_agent
+
+    monkeypatch.setenv("LLM_MODEL_ANSWER", "configured-answer-model")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.llm_model_answer == "configured-answer-model"
+
+    client = AsyncMock()
+    client.messages.create = AsyncMock(
+        return_value=_mock_response("end_turn", [_mock_text_block("ok")])
+    )
+    agent = await get_agent(
+        session=MagicMock(),
+        embeddings=MagicMock(),
+        client=client,
+        langfuse=None,
+        settings=settings,
+    )
+
+    async for _event in agent.run("Tell me about bonds", SARAH_CHEN):
+        pass
+
+    sent = client.messages.create.await_args.kwargs
+    assert sent["model"] == settings.llm_model_answer
+    for forbidden in ("temperature", "top_p", "top_k"):
+        assert forbidden not in sent

@@ -156,6 +156,46 @@ class TestModels:
             assert settings_env[key] not in str(exc.value)
 
 
+class TestAnthropicBaseUrl:
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://api.anthropic.com",
+            "https://egress.example.com/proxy",
+            "http://localhost",
+            "http://localhost:8080",
+            "http://127.0.0.1:9000",
+            "http://[::1]:9000",
+        ],
+    )
+    def test_accepted(self, monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", url)
+        assert build().anthropic_base_url == url
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://example.com",
+            "http://api.anthropic.com",
+            "http://localhost.evil.com",
+            "ftp://localhost",
+            "api.anthropic.com",
+            "https://",
+            "https://user:s3cret-pw@api.anthropic.com",
+            "https://user@api.anthropic.com",
+            "http://user:s3cret-pw@localhost",
+        ],
+    )
+    def test_rejected_names_var_and_hides_value(
+        self, monkeypatch: pytest.MonkeyPatch, url: str
+    ) -> None:
+        monkeypatch.setenv("ANTHROPIC_BASE_URL", url)
+        with pytest.raises(ValidationError) as exc:
+            build()
+        assert "ANTHROPIC_BASE_URL" in str(exc.value)
+        assert "s3cret-pw" not in str(exc.value)
+
+
 class TestDsn:
     def test_dsn_shape(self, settings_env: dict[str, str]) -> None:
         dsn = build().database_dsn

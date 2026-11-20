@@ -31,13 +31,12 @@ services:
       LANGFUSE_HOST: http://langfuse:3000
       VOYAGE_API_KEY: ${VOYAGE_API_KEY:?set VOYAGE_API_KEY in .env}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       PII_MODE: regex
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
     depends_on:
       postgres:
         condition: service_healthy
-      kong:
-        condition: service_started
 
   frontend:
     build: ./frontend
@@ -47,26 +46,6 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
       - backend
-
-  litellm:
-    build: ./litellm
-    ports:
-      - "4000:4000"
-    environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-
-  kong:
-    build: ./kong
-    ports:
-      - "8001:8000"
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
-    depends_on:
-      - litellm
 
   langfuse:
     image: langfuse/langfuse:2

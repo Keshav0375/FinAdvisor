@@ -12,6 +12,8 @@ import anthropic
 import httpx
 import structlog
 
+from src.config import Settings
+
 log = structlog.get_logger()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -20,7 +22,6 @@ DEFAULT_JUDGE_PROMPT = PROJECT_ROOT / "data" / "eval" / "judge_prompt.txt"
 DEFAULT_USERS = PROJECT_ROOT / "data" / "seed" / "mock_users.json"
 DEFAULT_OUTPUT = PROJECT_ROOT / "eval_results.json"
 DEFAULT_API_BASE = "http://localhost:8000"
-JUDGE_MODEL = "claude-sonnet-4-20250514"
 
 
 def load_eval_set(path: Path) -> list[dict[str, Any]]:
@@ -121,6 +122,8 @@ async def judge_response(
     question: str,
     response: str,
     tool_results: list[str],
+    *,
+    model: str,
 ) -> dict[str, Any]:
     chunks_text = "\n---\n".join(tool_results) if tool_results else "(no chunks retrieved)"
 
@@ -132,7 +135,7 @@ async def judge_response(
 
     try:
         result = await llm.messages.create(
-            model=JUDGE_MODEL,
+            model=model,
             max_tokens=512,
             system=judge_prompt,
             messages=[{"role": "user", "content": user_message}],
@@ -189,9 +192,11 @@ async def run_eval(
     base_url: str,
     output_path: Path,
     anthropic_key: str,
+    anthropic_base_url: str,
+    judge_model: str,
     compare_baseline: Path | None = None,
 ) -> dict[str, Any]:
-    llm = anthropic.AsyncAnthropic(api_key=anthropic_key)
+    llm = anthropic.AsyncAnthropic(api_key=anthropic_key, base_url=anthropic_base_url)
     results: list[dict[str, Any]] = []
 
     async with httpx.AsyncClient() as client:
@@ -418,7 +423,7 @@ def parse_args() -> argparse.Namespace:
         "--anthropic-key",
         type=str,
         default=None,
-        help="Anthropic API key for judge (falls back to ANTHROPIC_API_KEY env var)",
+        help="Anthropic API key for judge (overrides Settings ANTHROPIC_API_KEY)",
     )
     parser.add_argument(
         "--limit",
@@ -430,14 +435,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    import os
-
     args = parse_args()
 
-    api_key = args.anthropic_key or os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        log.error("no_anthropic_key", hint="Set ANTHROPIC_API_KEY or pass --anthropic-key")
-        sys.exit(1)
+    settings = Settings()
+    api_key = args.anthropic_key or settings.anthropic_api_key.get_secret_value()
 
     eval_set = load_eval_set(args.eval_set)
     judge_prompt = load_judge_prompt(args.judge_prompt)
@@ -461,6 +462,8 @@ def main() -> None:
             base_url=args.api_base,
             output_path=args.output,
             anthropic_key=api_key,
+            anthropic_base_url=settings.anthropic_base_url,
+            judge_model=settings.llm_model_judge,
             compare_baseline=args.compare_baseline,
         )
     )
