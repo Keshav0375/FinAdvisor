@@ -43,12 +43,12 @@ class TestCheckModels:
         problems = check_models(settings, today=date(2026, 11, 30))
         assert _by_key(problems)["LLM_MODEL_AUX"].reason == "retired"
 
-    def test_retiring_soon_warns_but_is_not_fatal(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_retiring_soon_is_fatal(self, monkeypatch: pytest.MonkeyPatch) -> None:
         settings = _settings(monkeypatch, LLM_MODEL_AUX=RETIRING_ID)
         problems = check_models(settings, today=TODAY)
         problem = _by_key(problems)["LLM_MODEL_AUX"]
         assert problem.reason == "retiring_soon"
-        assert not problem.fatal
+        assert problem.fatal
 
     def test_retiring_model_outside_the_window_is_clean(
         self, monkeypatch: pytest.MonkeyPatch
@@ -132,7 +132,13 @@ class TestCli:
         result = self._run()
         assert result.returncode == 0, result.stdout + result.stderr
 
-    def test_warning_only_exits_0_but_prints_the_key(self) -> None:
+    def test_retiring_soon_exits_1(self) -> None:
+        # claude-sonnet-4-5 retires 2026-11-30; a window this wide covers it until it retires.
+        result = self._run(LLM_MODEL_AUX=RETIRING_ID, MODEL_RETIRE_WARN_DAYS="36500")
+        assert result.returncode == 1
+        assert "LLM_MODEL_AUX" in result.stdout
+
+    def test_deprecated_without_date_exits_0_but_prints_the_key(self) -> None:
         result = self._run(LLM_MODEL_AUX=DEPRECATED_ID)
         assert result.returncode == 0
         assert "LLM_MODEL_AUX" in result.stdout

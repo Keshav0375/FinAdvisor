@@ -1,7 +1,9 @@
 """Retired-model check for the configured model ids (ADR-006, arch 06 section 6.6).
 
 `check_models` is pure (the clock is injected). `python -m src.model_lifecycle` is the CI entry
-point: it prints one line per problem and exits 1 only when a problem is fatal.
+point: it prints one line per problem and exits 1 only when a problem is fatal (retired, retiring
+within MODEL_RETIRE_WARN_DAYS, or unknown); a deprecated model with no retirement date only warns
+(arch 06 section 6.6, ADR-025 R6).
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ SOURCE_URL = "https://platform.claude.com/docs/en/about-claude/model-deprecation
 Reason = Literal["retired", "retiring_soon", "deprecated", "unknown"]
 
 # Reasons that fail boot, CI and readiness; the others are reported as warnings.
-FATAL_REASONS: frozenset[Reason] = frozenset({"retired", "unknown"})
+FATAL_REASONS: frozenset[Reason] = frozenset({"retired", "retiring_soon", "unknown"})
 
 
 @dataclass(frozen=True)
