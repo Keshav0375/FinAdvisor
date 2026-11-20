@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from src.config import Settings
-from src.model_lifecycle import ModelProblem, check_models
+from src.model_lifecycle import ModelProblem, check_models, main
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 TODAY = date(2026, 11, 1)
@@ -27,6 +27,18 @@ def _settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> Settings:
 
 def _by_key(problems: list[ModelProblem]) -> dict[str, ModelProblem]:
     return {problem.key: problem for problem in problems}
+
+
+def _run_cli(**env: str) -> subprocess.CompletedProcess[str]:
+    # os.environ already carries the dummy required keys set by the autouse fixture.
+    return subprocess.run(
+        [sys.executable, "-m", "src.model_lifecycle"],
+        cwd=BACKEND_DIR,
+        env={**os.environ, **env},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
 
 
 class TestCheckModels:
@@ -111,34 +123,35 @@ class TestCheckModels:
 
 
 class TestCli:
-    def _run(self, **env: str) -> subprocess.CompletedProcess[str]:
-        # os.environ already carries the dummy required keys set by the autouse fixture.
-        full_env = {**os.environ, **env}
-        return subprocess.run(
-            [sys.executable, "-m", "src.model_lifecycle"],
-            cwd=BACKEND_DIR,
-            env=full_env,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
     def test_retired_model_exits_1_and_names_the_key(self) -> None:
-        result = self._run(LLM_MODEL_ANSWER=RETIRED_ID)
+        # Real process and real clock: claude-sonnet-4-20250514 retired 2026-06-15, so the
+        # result cannot change with the date.
+        result = _run_cli(LLM_MODEL_ANSWER=RETIRED_ID)
         assert result.returncode == 1
         assert "LLM_MODEL_ANSWER" in result.stdout
 
     def test_default_models_exit_0(self) -> None:
-        result = self._run()
+        # Default ids carry no dates in the table, so the real clock cannot change the result.
+        result = _run_cli()
         assert result.returncode == 0, result.stdout + result.stderr
 
-    def test_retiring_soon_exits_1(self) -> None:
-        # claude-sonnet-4-5 retires 2026-11-30; a window this wide covers it until it retires.
-        result = self._run(LLM_MODEL_AUX=RETIRING_ID, MODEL_RETIRE_WARN_DAYS="36500")
-        assert result.returncode == 1
-        assert "LLM_MODEL_AUX" in result.stdout
+    def test_retiring_soon_exits_1(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("LLM_MODEL_AUX", RETIRING_ID)
+        assert main(today=TODAY) == 1
+        assert "LLM_MODEL_AUX" in capsys.readouterr().out
 
-    def test_deprecated_without_date_exits_0_but_prints_the_key(self) -> None:
-        result = self._run(LLM_MODEL_AUX=DEPRECATED_ID)
-        assert result.returncode == 0
-        assert "LLM_MODEL_AUX" in result.stdout
+    def test_retiring_model_outside_window_exits_0(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("LLM_MODEL_AUX", RETIRING_ID)
+        assert main(today=date(2026, 9, 1)) == 0
+        assert capsys.readouterr().out == ""
+
+    def test_deprecated_without_date_exits_0_but_prints_the_key(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("LLM_MODEL_AUX", DEPRECATED_ID)
+        assert main(today=TODAY) == 0
+        assert "LLM_MODEL_AUX" in capsys.readouterr().out

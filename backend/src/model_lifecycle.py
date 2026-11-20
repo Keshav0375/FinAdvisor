@@ -98,8 +98,9 @@ def check_models(settings: Settings, *, today: date) -> list[ModelProblem]:
     return [problem for problem in problems if problem is not None]
 
 
-def main() -> int:
-    problems = check_models(Settings(), today=datetime.now(UTC).date())
+def main(today: date | None = None) -> int:
+    """CLI body; `today` is injectable for tests and defaults to the current UTC date."""
+    problems = check_models(Settings(), today=today or datetime.now(UTC).date())
     for problem in problems:
         print(problem.line())
     return 1 if any(problem.fatal for problem in problems) else 0
