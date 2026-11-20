@@ -13,16 +13,6 @@ output "langfuse_url" {
   value       = google_cloud_run_v2_service.langfuse.uri
 }
 
-output "litellm_url" {
-  description = "LiteLLM Cloud Run service URL"
-  value       = google_cloud_run_v2_service.litellm.uri
-}
-
-output "kong_url" {
-  description = "Kong Cloud Run service URL"
-  value       = google_cloud_run_v2_service.kong.uri
-}
-
 output "db_connection_name" {
   description = "Cloud SQL connection name for app DB"
   value       = google_sql_database_instance.finadvisor.connection_name
