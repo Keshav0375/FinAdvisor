@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     langfuse_public_key: str | None = _env("LANGFUSE_PUBLIC_KEY", default=None)
     langfuse_secret_key: SecretStr | None = _env("LANGFUSE_SECRET_KEY", default=None)
 
+    # Seconds /readyz waits for its database check (SELECT 1) before reporting it failing.
+    readiness_timeout_s: float = _env("READINESS_TIMEOUT_S", default=2.0, gt=0)
+
     # PII
     pii_mode: str = _env("PII_MODE", default="regex")
     gcp_project_id: str = _env("GCP_PROJECT_ID", default="")
