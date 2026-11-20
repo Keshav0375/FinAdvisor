@@ -60,3 +60,40 @@ if out="$(docker run --rm "$BUILDER_TAG" sh -c \
 fi
 echo "$out" | grep -qi "lock" || fail "stale-lock check failed for another reason: $out"
 echo "ok: stale lock fails poetry check --lock"
+
+# .dockerignore keeps secret-like and bytecode files out at any depth, not just the context root.
+# The build runs from a copy of backend/ in a temporary directory with dummy nested files added;
+# Python's TemporaryDirectory removes the copy, so the host tree is never touched. A local
+# directory is required: BuildKit does not apply .dockerignore to a tar context streamed on stdin.
+# .venv and tool caches are left out of the copy for size only; .dockerignore drops them anyway.
+IGNORE_TAG_PREFIX="${IGNORE_TAG_PREFIX:-fa-backend:test-ignore}"
+python3 -I - "$BACKEND_DIR" "$IGNORE_TAG_PREFIX" <<'PY_EOF' || fail ".dockerignore lets nested excluded files into an image"
+import pathlib, shutil, subprocess, sys, tempfile
+backend, tag_prefix = pathlib.Path(sys.argv[1]), sys.argv[2]
+planted = [
+    "src/.env", "src/.env.local", "src/nested/deep.pem", "src/nested/deep.key",
+    "scripts/.env.prod", "db/fixtures/x.pem", "tests/fixtures/x.pem", "tests/fixtures/x.key",
+    "tests/fixtures/.env.test", "src/__pycache__/stale.cpython-312.pyc", "tests/stale.pyc",
+]
+find_excluded = ["find", "/app", "(", "-name", ".env", "-o", "-name", ".env.*", "-o", "-name", "*.pem",
+                 "-o", "-name", "*.key", "-o", "-name", "*.pyc", "-o", "-name", "__pycache__", ")", "-print"]
+leaked = False
+with tempfile.TemporaryDirectory(prefix="fa-ignore-ctx-") as tmp:
+    ctx = pathlib.Path(tmp) / "backend"
+    shutil.copytree(backend, ctx, ignore=shutil.ignore_patterns(".venv", ".mypy_cache", ".ruff_cache", ".pytest_cache"))
+    for name in planted:
+        path = ctx / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("dummy-not-a-secret\n")
+    for target in ("runtime", "dev"):
+        tag = f"{tag_prefix}-{target}"
+        subprocess.run(["docker", "build", "--quiet", "--target", target, "-t", tag, str(ctx)],
+                       check=True, stdout=subprocess.DEVNULL)
+        found = subprocess.run(["docker", "run", "--rm", tag, *find_excluded],
+                               check=True, capture_output=True, text=True).stdout.strip()
+        if found:
+            leaked = True
+            print(f"{target} image contains files .dockerignore should exclude:\n{found}", file=sys.stderr)
+sys.exit(1 if leaked else 0)
+PY_EOF
+echo "ok: nested .env*, *.pem, *.key, *.pyc excluded from runtime and dev images"
