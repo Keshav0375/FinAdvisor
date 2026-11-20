@@ -20,19 +20,34 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: |
+          pip install "poetry==2.1.2"
+          poetry install --with dev --no-interaction --no-root
 
       - name: Lint
-        run: ruff check .
+        run: poetry run ruff check .
 
       - name: Format check
-        run: ruff format --check .
+        run: poetry run ruff format --check .
 
       - name: Typecheck
-        run: mypy src/
+        run: poetry run mypy src/
 
       - name: Unit tests
-        run: pytest tests/ -x --tb=short
+        run: poetry run pytest tests/ -x --tb=short
+        # Throwaway, non-placeholder values so the typed Settings boot; never real secrets.
+        # No TEST_DATABASE_URL here, so DB-backed tests skip.
+        env:
+          DB_HOST: db.ci.invalid
+          DB_NAME: finadvisor_ci
+          DB_USER: ci_user
+          DB_PASSWORD: ci-unused-db-pass
+          DB_POOL_SIZE: "5"
+          DB_STATEMENT_TIMEOUT_MS: "30000"
+          ANTHROPIC_API_KEY: ci-unused-anthropic-key
+          ANTHROPIC_BASE_URL: https://api.anthropic.com
+          VOYAGE_API_KEY: ci-unused-voyage-key
+          JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
 
   eval-gate:
     needs: lint-and-test
