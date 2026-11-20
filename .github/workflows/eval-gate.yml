@@ -49,8 +49,29 @@ jobs:
           VOYAGE_API_KEY: ci-unused-voyage-key
           JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
 
+  # The eval gate needs real API keys. Without them eval-gate shows as Skipped (gray), never as
+  # a fake green, and this job leaves a visible notice. Keys are never faked.
+  secrets-check:
+    runs-on: ubuntu-latest
+    outputs:
+      has_keys: ${{ steps.check.outputs.has_keys }}
+    steps:
+      - name: Check eval secrets
+        id: check
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] && [ -n "$VOYAGE_API_KEY" ]; then
+            echo "has_keys=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::eval-gate skipped: ANTHROPIC_API_KEY/VOYAGE_API_KEY secrets not configured"
+            echo "has_keys=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+
   eval-gate:
-    needs: lint-and-test
+    needs: [lint-and-test, secrets-check]
+    if: needs.secrets-check.outputs.has_keys == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -68,39 +89,20 @@ jobs:
           --health-retries 5
 
     steps:
-      # The eval needs real API keys. Without them the job skips with a visible notice and
-      # stays green; it runs for real once the repo secrets are added. Keys are never faked.
-      - name: Check secrets
-        id: check-secrets
-        run: |
-          if [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$VOYAGE_API_KEY" ]; then
-            echo "::notice::eval-gate skipped: ANTHROPIC_API_KEY/VOYAGE_API_KEY secrets not configured"
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
-
       - uses: actions/checkout@v4
-        if: steps.check-secrets.outputs.run == 'true'
 
       - name: Setup Python
-        if: steps.check-secrets.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install dependencies
-        if: steps.check-secrets.outputs.run == 'true'
         run: |
           pip install "poetry==2.1.2"
           poetry install --with dev --no-interaction
         working-directory: backend
 
       - name: Setup DB and seed eval data
-        if: steps.check-secrets.outputs.run == 'true'
         run: |
           psql -h localhost -U test -d finadvisor_test -f db/schema.sql
           poetry run python scripts/ingest.py --target test
@@ -119,7 +121,6 @@ jobs:
           VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
 
       - name: Start backend
-        if: steps.check-secrets.outputs.run == 'true'
         run: |
           poetry run uvicorn src.main:app --host 0.0.0.0 --port 8000 &
           sleep 5
@@ -140,7 +141,6 @@ jobs:
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
 
       - name: Run eval set
-        if: steps.check-secrets.outputs.run == 'true'
         run: |
           poetry run python scripts/run_eval.py \
             --eval-set ../data/eval/golden_qa.json \
@@ -151,7 +151,6 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Check thresholds
-        if: steps.check-secrets.outputs.run == 'true'
         working-directory: backend
         run: |
           poetry run python -c "
@@ -172,7 +171,7 @@ jobs:
           "
 
       - name: Upload results
-        if: always() && steps.check-secrets.outputs.run == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eval-results

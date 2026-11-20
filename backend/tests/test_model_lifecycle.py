@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import runpy
 import subprocess
 import sys
 from datetime import date
@@ -8,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from src.config import Settings
+from src.config import LIFECYCLE_TABLE, Settings
 from src.model_lifecycle import ModelProblem, check_models, main
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -155,3 +156,70 @@ class TestCli:
         monkeypatch.setenv("LLM_MODEL_AUX", DEPRECATED_ID)
         assert main(today=TODAY) == 0
         assert "LLM_MODEL_AUX" in capsys.readouterr().out
+
+
+class TestCliConfigErrors:
+    def test_missing_env_prints_one_line_with_names_and_exits_1(self) -> None:
+        # Real process: a missing required key must not end in a traceback.
+        env = {key: value for key, value in os.environ.items() if key != "ANTHROPIC_API_KEY"}
+        result = subprocess.run(
+            [sys.executable, "-m", "src.model_lifecycle"],
+            cwd=BACKEND_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert result.stderr == "model-lifecycle: config invalid: ANTHROPIC_API_KEY\n"
+
+    def test_invalid_values_are_named_never_printed(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("JWT_SECRET", "short-secret-value")
+        monkeypatch.setenv("MODEL_RETIRE_WARN_DAYS", "-7")
+        assert main(today=TODAY) == 1
+        out = capsys.readouterr()
+        assert out.out == ""
+        assert out.err.count("\n") == 1
+        assert out.err.startswith("model-lifecycle: config invalid: ")
+        assert "JWT_SECRET" in out.err
+        assert "MODEL_RETIRE_WARN_DAYS" in out.err
+        assert "short-secret-value" not in out.err
+        assert "-7" not in out.err
+
+    def test_cross_field_error_names_the_variables(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setenv("LLM_MODEL_JUDGE", "claude-sonnet-5-5")
+        assert main(today=TODAY) == 1
+        err = capsys.readouterr().err
+        assert err == "model-lifecycle: config invalid: LLM_MODEL_JUDGE, LLM_MODEL_ANSWER\n"
+        assert "claude-sonnet-5-5" not in err
+
+
+class TestModuleEntryPoint:
+    def test_running_as_main_exits_with_the_check_result(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # In-process run of the `__main__` guard, so coverage sees the entry line.
+        monkeypatch.setenv("LLM_MODEL_ANSWER", RETIRED_ID)
+        monkeypatch.delitem(sys.modules, "src.model_lifecycle", raising=False)
+        with pytest.raises(SystemExit) as exc:
+            runpy.run_module("src.model_lifecycle", run_name="__main__")
+        assert exc.value.code == 1
+
+
+class TestLifecycleTableInConfig:
+    def test_table_lives_in_config_and_covers_the_default_models(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        settings = _settings(monkeypatch)
+        for model in (
+            settings.llm_model_answer,
+            settings.llm_model_aux,
+            settings.llm_model_judge,
+            settings.llm_model_fallback,
+        ):
+            assert LIFECYCLE_TABLE[model].model == model
