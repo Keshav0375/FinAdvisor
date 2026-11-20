@@ -20,26 +20,62 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: |
+          pip install "poetry==2.1.2"
+          poetry install --with dev --no-interaction --no-root
 
       - name: Lint
-        run: ruff check .
+        run: poetry run ruff check .
 
       - name: Format check
-        run: ruff format --check .
+        run: poetry run ruff format --check .
 
       - name: Typecheck
-        run: mypy src/
+        run: poetry run mypy src/
 
       - name: Unit tests
-        run: pytest tests/ -x --tb=short
+        run: poetry run pytest tests/ -x --tb=short
+        # Throwaway, non-placeholder values so the typed Settings boot; never real secrets.
+        # No TEST_DATABASE_URL here, so DB-backed tests skip.
+        env:
+          DB_HOST: db.ci.invalid
+          DB_NAME: finadvisor_ci
+          DB_USER: ci_user
+          DB_PASSWORD: ci-unused-db-pass
+          DB_POOL_SIZE: "5"
+          DB_STATEMENT_TIMEOUT_MS: "30000"
+          ANTHROPIC_API_KEY: ci-unused-anthropic-key
+          ANTHROPIC_BASE_URL: https://api.anthropic.com
+          VOYAGE_API_KEY: ci-unused-voyage-key
+          JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
+
+  # The eval gate needs real API keys. Without them eval-gate shows as Skipped (gray), never as
+  # a fake green, and this job leaves a visible notice. Keys are never faked.
+  secrets-check:
+    runs-on: ubuntu-latest
+    outputs:
+      has_keys: ${{ steps.check.outputs.has_keys }}
+    steps:
+      - name: Check eval secrets
+        id: check
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ] && [ -n "$VOYAGE_API_KEY" ]; then
+            echo "has_keys=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::eval-gate skipped: ANTHROPIC_API_KEY/VOYAGE_API_KEY secrets not configured"
+            echo "has_keys=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
 
   eval-gate:
-    needs: lint-and-test
+    needs: [lint-and-test, secrets-check]
+    if: needs.secrets-check.outputs.has_keys == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:0.8.5-pg16
         env:
           POSTGRES_DB: finadvisor_test
           POSTGRES_USER: test
@@ -61,13 +97,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: |
+          pip install "poetry==2.1.2"
+          poetry install --with dev --no-interaction
         working-directory: backend
 
       - name: Setup DB and seed eval data
         run: |
           psql -h localhost -U test -d finadvisor_test -f db/schema.sql
-          python scripts/ingest.py --target test
+          poetry run python scripts/ingest.py --target test
         working-directory: backend
         env:
           PGPASSWORD: test
@@ -84,7 +122,7 @@ jobs:
 
       - name: Start backend
         run: |
-          uvicorn src.main:app --host 0.0.0.0 --port 8000 &
+          poetry run uvicorn src.main:app --host 0.0.0.0 --port 8000 &
           sleep 5
         working-directory: backend
         env:
@@ -104,7 +142,7 @@ jobs:
 
       - name: Run eval set
         run: |
-          python scripts/run_eval.py \
+          poetry run python scripts/run_eval.py \
             --eval-set ../data/eval/golden_qa.json \
             --output ../eval_results.json \
             --api-base http://localhost:8000
@@ -113,10 +151,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Check thresholds
+        working-directory: backend
         run: |
-          python -c "
+          poetry run python -c "
           import json, sys
-          results = json.load(open('eval_results.json'))
+          results = json.load(open('../eval_results.json'))
           agg = results['aggregate']
           faith = agg['avg_faithfulness']
           cite = agg['avg_citation_accuracy']

@@ -57,3 +57,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "live: calls a real external API (Voyage, Anthropic); runs only when LIVE_API_TESTS=1",
+]
