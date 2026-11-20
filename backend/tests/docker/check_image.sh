@@ -33,7 +33,11 @@ echo "ok: versions match lock ($actual)"
 docker run --rm --entrypoint "" "$DEV_TAG" pytest --version >/dev/null || fail "pytest missing in dev"
 
 # The full suite runs in the dev image with no --ignore; a collection error fails the check.
-if ! out="$(docker run --rm --entrypoint "" "$DEV_TAG" pytest tests/ -p no:cacheprovider 2>&1)"; then
+# test_settings reads the repo-root .env.example, which is outside the build context; it is
+# mounted read-only at the path the test resolves from /app (the filesystem root).
+REPO_ROOT="$(cd "$BACKEND_DIR/.." && pwd)"
+if ! out="$(docker run --rm --entrypoint "" -v "$REPO_ROOT/.env.example:/.env.example:ro" \
+  "$DEV_TAG" pytest tests/ -p no:cacheprovider 2>&1)"; then
   echo "$out" >&2
   if echo "$out" | grep -qE 'error(s)? during collection|ERROR collecting'; then
     fail "pytest collection error in dev image"

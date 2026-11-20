@@ -142,6 +142,29 @@ npm run dev
 # Open http://localhost:3000
 ```
 
+### Entrypoints and migrations
+
+The backend image (and `backend/src/entrypoint.py`) has two entrypoints:
+
+```bash
+cd backend
+python -m src.entrypoint api            # serve the API: 0.0.0.0, one uvicorn process
+python -m src.entrypoint jobs migrate   # alembic upgrade head on the configured database
+```
+
+`jobs migrate` builds an empty database up to the schema in `backend/db/schema.sql`
+(revision `0001`); run it before the first `api`. Any other command exits 2 with usage. In the
+image, `docker run fa-backend:test jobs migrate` and `docker run fa-backend:test` (= `api`)
+do the same. Migrations live in `backend/migrations/`; the database URL is never in
+`alembic.ini`, it comes from the settings below.
+
+Settings added for this (env vars, see `.env.example`):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `PORT` | `8000` | Port the `api` entrypoint listens on |
+| `DB_CONNECT_TIMEOUT_S` | `10` | Seconds to wait for a database connection before a migration fails |
+
 ### Key Commands
 
 ```bash
