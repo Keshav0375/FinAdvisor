@@ -185,6 +185,54 @@ def test_migrated_schema_is_identical_to_schema_sql(new_database: Callable[[], s
     assert dump_a == dump_b
 
 
+def _load_schema_sql(database: str) -> None:
+    loaded = _run(
+        ["psql", "-v", "ON_ERROR_STOP=1", "-q", "-f", str(SCHEMA_SQL)],
+        {**os.environ, **_pg_env(database)},
+    )
+    assert loaded.returncode == 0, loaded.stderr
+
+
+def _tables(database: str) -> list[str]:
+    tables: list[str] = _scalars_sync(
+        database, "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1"
+    )
+    return tables
+
+
+def test_migrate_refuses_a_schema_sql_database_and_never_stamps(
+    new_database: Callable[[], str],
+) -> None:
+    database = new_database()
+    _load_schema_sql(database)
+    tables_before = _tables(database)
+
+    refused = _migrate(database)
+    output = refused.stdout + refused.stderr
+    assert refused.returncode == 1, output
+    assert "migrate_refused" in output
+    assert "schema.sql" in output
+    assert "python -m alembic stamp 0001" in output
+    assert _tables(database) == tables_before
+    assert "alembic_version" not in tables_before
+
+
+def test_stamp_then_migrate_adopts_a_schema_sql_database(
+    new_database: Callable[[], str],
+) -> None:
+    database = new_database()
+    _load_schema_sql(database)
+    dump_before = _dump(database)
+
+    stamped = _run([sys.executable, "-m", "alembic", "stamp", "0001"], _settings_env(database))
+    assert stamped.returncode == 0, stamped.stdout + stamped.stderr
+
+    migrated = _migrate(database)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    assert _scalars_sync(database, "SELECT version_num FROM alembic_version") == ["0001"]
+    assert _dump(database) == dump_before
+
+
 def test_downgrade_to_base_leaves_only_alembic_version(new_database: Callable[[], str]) -> None:
     database = new_database()
     migrated = _migrate(database)
@@ -201,3 +249,7 @@ def test_downgrade_to_base_leaves_only_alembic_version(new_database: Callable[[]
         database, "SELECT rolname FROM pg_roles WHERE rolname LIKE 'finadvisor_%'"
     )
     assert sorted(roles) == ["finadvisor_app", "finadvisor_service"]
+    extensions = _scalars_sync(
+        database, "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'pgcrypto')"
+    )
+    assert sorted(extensions) == ["pgcrypto", "vector"]

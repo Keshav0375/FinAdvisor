@@ -13,6 +13,7 @@ from alembic.config import Config
 from pydantic import ValidationError
 
 from src.config import Settings
+from src.db.migration_guard import REFUSE_UNVERSIONED_ATTR, UnversionedSchemaError
 from src.observability.logging import configure_logging
 
 log = structlog.get_logger()
@@ -46,6 +47,14 @@ def redact(message: str, settings: Settings) -> str:
     return message
 
 
+def config_errors(exc: ValidationError) -> list[dict[str, str]]:
+    """Field names and error types only: the error text can echo the rejected input value."""
+    return [
+        {"field": ".".join(str(part) for part in error["loc"]) or "settings", "type": error["type"]}
+        for error in exc.errors(include_input=False, include_url=False, include_context=False)
+    ]
+
+
 def run_api(settings: Settings) -> int:
     uvicorn.run("src.main:app", host=API_HOST, port=settings.port, workers=1)
     return EXIT_OK
@@ -53,8 +62,12 @@ def run_api(settings: Settings) -> int:
 
 def run_migrate(settings: Settings) -> int:
     config = Config(str(ALEMBIC_INI))
+    config.attributes[REFUSE_UNVERSIONED_ATTR] = True
     try:
         command.upgrade(config, "head")
+    except UnversionedSchemaError as exc:
+        log.error("migrate_refused", reason=str(exc), database=settings.db_name)
+        return EXIT_FAILED
     except Exception as exc:  # any failure must end the job non-zero without leaking the DSN
         log.error(
             "migrate_failed",
@@ -75,7 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         settings = Settings()
     except ValidationError as exc:
-        log.error("config_invalid", error=str(exc))
+        log.error("config_invalid", errors=config_errors(exc))
         return EXIT_FAILED
     if args.command == "api":
         return run_api(settings)

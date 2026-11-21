@@ -99,14 +99,13 @@ $$""",
 )
 
 # Reverse order of creation. Roles are cluster-global and may serve other databases, so the
-# guarded CREATE ROLE is deliberately not undone. Dropping the tables drops their grants.
+# guarded CREATE ROLE is deliberately not undone. The vector and pgcrypto extensions stay too:
+# other objects may depend on them. Dropping the tables drops their grants.
 DOWNGRADE_STATEMENTS: tuple[str, ...] = (
     "DROP POLICY IF EXISTS chunk_visibility ON chunks",
     "DROP TABLE IF EXISTS suitability_rules",
     "DROP TABLE IF EXISTS chunks",
     "DROP TABLE IF EXISTS documents",
-    "DROP EXTENSION IF EXISTS pgcrypto",
-    "DROP EXTENSION IF EXISTS vector",
 )
 
 

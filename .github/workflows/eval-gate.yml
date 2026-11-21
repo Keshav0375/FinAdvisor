@@ -7,6 +7,21 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    # Throwaway pgvector for the migration integration tests (same tag as the eval-gate job).
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.5-pg16
+        env:
+          POSTGRES_DB: finadvisor_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: backend
@@ -48,6 +63,28 @@ jobs:
           ANTHROPIC_BASE_URL: https://api.anthropic.com
           VOYAGE_API_KEY: ci-unused-voyage-key
           JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
+
+      - name: Migration tests (Postgres)
+        # Only these files get TEST_DATABASE_URL: the rest of the DB-backed suite needs seeded
+        # data (ingest with real keys) and runs in eval-gate. psql/pg_dump must exist, or the
+        # migration tests would skip and pass silently.
+        run: |
+          psql --version
+          pg_dump --version
+          pg_isready -h localhost -U test
+          poetry run pytest tests/test_migrations.py tests/test_entrypoint.py -v --tb=short
+        env:
+          DB_HOST: db.ci.invalid
+          DB_NAME: finadvisor_ci
+          DB_USER: ci_user
+          DB_PASSWORD: ci-unused-db-pass
+          DB_POOL_SIZE: "5"
+          DB_STATEMENT_TIMEOUT_MS: "30000"
+          ANTHROPIC_API_KEY: ci-unused-anthropic-key
+          ANTHROPIC_BASE_URL: https://api.anthropic.com
+          VOYAGE_API_KEY: ci-unused-voyage-key
+          JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
+          TEST_DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/finadvisor_test
 
   # The eval gate needs real API keys. Without them eval-gate shows as Skipped (gray), never as
   # a fake green, and this job leaves a visible notice. Keys are never faked.

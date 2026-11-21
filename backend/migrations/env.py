@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import inspect, pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.config import Settings
+from src.db.migration_guard import REFUSE_UNVERSIONED_ATTR, check_versioned
 
 # Migrations are hand-written SQL, so there is no model metadata to autogenerate from.
 target_metadata = None
@@ -15,7 +16,11 @@ target_metadata = None
 
 def _do_run_migrations(connection: Connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
+    # The check runs inside Alembic's transaction: inspecting before it would autobegin a
+    # transaction that Alembic then treats as the caller's and never commits.
     with context.begin_transaction():
+        if context.config.attributes.get(REFUSE_UNVERSIONED_ATTR):
+            check_versioned(inspect(connection).get_table_names(schema="public"))
         context.run_migrations()
 
 

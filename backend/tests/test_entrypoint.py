@@ -10,10 +10,12 @@ import pytest
 import uvicorn
 from alembic import command
 from alembic.config import Config
+from pydantic import ValidationError
 from sqlalchemy.exc import OperationalError
 
 from src import entrypoint
 from src.config import Settings
+from src.db.migration_guard import REFUSE_UNVERSIONED_ATTR, check_versioned
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 MIGRATE_TIMEOUT_S = 30
@@ -70,6 +72,60 @@ def test_migrate_upgrades_to_head_with_the_repo_alembic_ini(
     monkeypatch.setattr(command, "upgrade", fake_upgrade)
     assert entrypoint.main(["jobs", "migrate"]) == 0
     assert calls == [(str(BACKEND_DIR / "alembic.ini"), "head")]
+
+
+def test_invalid_config_logs_field_names_and_types_but_never_values(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rejected = "short-jwt-9f3a"
+    monkeypatch.setenv("JWT_SECRET", rejected)
+    monkeypatch.setenv("DB_PORT", "not-a-port-7c1e")
+    assert entrypoint.main(["jobs", "migrate"]) == 1
+    out = capsys.readouterr().out
+    assert "config_invalid" in out
+    assert '"field": "JWT_SECRET"' in out and '"field": "DB_PORT"' in out
+    assert '"type": "value_error"' in out and '"type": "int_parsing"' in out
+    assert rejected not in out
+    assert "not-a-port-7c1e" not in out
+
+
+def test_config_errors_names_model_level_errors_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_MODEL_JUDGE", "claude-sonnet-5-5")
+    monkeypatch.setenv("LLM_MODEL_ANSWER", "claude-sonnet-5-5")
+    try:
+        Settings()
+    except ValidationError as exc:
+        assert entrypoint.config_errors(exc) == [{"field": "settings", "type": "value_error"}]
+    else:
+        pytest.fail("Settings accepted a judge model equal to the answer model")
+
+
+def test_migrate_turns_on_the_unversioned_schema_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[object] = []
+    monkeypatch.setattr(
+        command,
+        "upgrade",
+        lambda config, revision: seen.append(config.attributes.get(REFUSE_UNVERSIONED_ATTR)),
+    )
+    assert entrypoint.main(["jobs", "migrate"]) == 0
+    assert seen == [True]
+
+
+def test_migrate_refuses_a_schema_sql_database_with_one_clear_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def refusing_upgrade(config: Config, revision: str) -> None:
+        check_versioned(["documents", "chunks", "suitability_rules"])
+
+    monkeypatch.setattr(command, "upgrade", refusing_upgrade)
+    assert entrypoint.main(["jobs", "migrate"]) == 1
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert len(lines) == 1
+    assert "migrate_refused" in lines[0]
+    assert "python -m alembic stamp 0001" in lines[0]
+    assert "migrate_failed" not in lines[0]
 
 
 def test_migrate_failure_is_nonzero_and_hides_the_password(
