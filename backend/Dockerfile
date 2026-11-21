@@ -50,6 +50,8 @@ COPY --from=builder-dev /opt/venv /opt/venv
 COPY --chown=app:app pyproject.toml ./
 COPY --chown=app:app src ./src
 COPY --chown=app:app scripts ./scripts
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app tests ./tests
 USER app
 EXPOSE 8000
@@ -67,6 +69,10 @@ COPY --chown=app:app pyproject.toml ./
 COPY --chown=app:app src ./src
 COPY --chown=app:app scripts ./scripts
 COPY --chown=app:app db ./db
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app migrations ./migrations
 USER app
 EXPOSE 8000
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Entrypoints: `api` (default) and `jobs migrate`; anything else exits 2 with usage.
+ENTRYPOINT ["python", "-m", "src.entrypoint"]
+CMD ["api"]

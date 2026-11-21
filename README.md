@@ -98,7 +98,7 @@ poetry run finadvisor
 `poetry run finadvisor` handles everything automatically:
 - Checks Docker is running (warns if not)
 - Starts PostgreSQL + pgvector container
-- Applies database schema (if first run)
+- Applies database migrations (`jobs migrate`, a no-op when already at the latest revision)
 - Ingests 50 synthetic documents with embeddings (if first run, costs ~$0.01 via Voyage AI)
 - Starts the FastAPI backend on `:8000`
 - Installs frontend deps and starts Next.js on `:3000`
@@ -130,7 +130,7 @@ docker compose up -d postgres
 # Backend setup
 cd backend
 pip install -e ".[dev]"
-psql -h localhost -U finadvisor -d finadvisor -f db/schema.sql
+python -m src.entrypoint jobs migrate
 python scripts/ingest.py
 uvicorn src.main:app --reload
 
@@ -141,6 +141,48 @@ npm run dev
 
 # Open http://localhost:3000
 ```
+
+### Entrypoints and migrations
+
+The backend image (and `backend/src/entrypoint.py`) has two entrypoints:
+
+```bash
+cd backend
+python -m src.entrypoint api            # serve the API: 0.0.0.0, one uvicorn process
+python -m src.entrypoint jobs migrate   # alembic upgrade head on the configured database
+```
+
+`jobs migrate` builds an empty database up to the schema in `backend/db/schema.sql`
+(revision `0001`); run it before the first `api`. Any other command exits 2 with usage. In
+the image, `docker run fa-backend:test jobs migrate` and `docker run fa-backend:test` (= `api`)
+do the same. Migrations live in `backend/migrations/`; the database URL is never in
+`alembic.ini`, it comes from the settings below.
+
+Compose Postgres starts empty (no schema is loaded at init), so with Docker Compose run the
+migrate step once after `docker compose up`. The dev image (the default with
+`docker-compose.override.yml`) has no ENTRYPOINT, so name the module:
+
+```bash
+docker compose up -d
+docker compose run --rm backend python -m src.entrypoint jobs migrate
+```
+
+A database built earlier from `schema.sql` (before migrations) has the tables but no
+`alembic_version` table. `jobs migrate` refuses it with exit 1 and never stamps on its own.
+After checking that the schema matches `schema.sql`, mark it at revision `0001` once, then run
+migrate again:
+
+```bash
+cd backend && python -m alembic stamp 0001        # host, same DB settings as the app
+docker compose run --rm backend python -m alembic stamp 0001   # or in the dev container
+```
+
+Settings added for this (env vars, see `.env.example`):
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `PORT` | `8000` | Port the `api` entrypoint listens on |
+| `DB_CONNECT_TIMEOUT_S` | `10` | Seconds to wait for a database connection before a migration fails |
 
 ### Key Commands
 

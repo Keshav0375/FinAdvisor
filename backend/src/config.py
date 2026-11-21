@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     db_password: SecretStr = _env("DB_PASSWORD")
     db_pool_size: int = _env("DB_POOL_SIZE", gt=0)
     db_statement_timeout_ms: int = _env("DB_STATEMENT_TIMEOUT_MS", gt=0)
+    db_connect_timeout_s: float = _env("DB_CONNECT_TIMEOUT_S", default=10.0, gt=0)
+
+    # HTTP server (the `api` entrypoint); PORT is the Cloud Run convention
+    port: int = _env("PORT", default=8000, gt=0, le=65535)
 
     # LLM (model ids are checked against LIFECYCLE_TABLE above by src/model_lifecycle.py)
     anthropic_api_key: SecretStr = _env("ANTHROPIC_API_KEY")

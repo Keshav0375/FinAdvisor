@@ -183,31 +183,17 @@ def _psql_query(query: str) -> tuple[int, str]:
 
 
 def ensure_schema() -> None:
-    rc, out = _psql_query(
-        "SELECT count(*) FROM information_schema.tables WHERE table_name='documents'"
-    )
-    if rc == 0 and out == "1":
-        _print("Database schema already applied.")
-        return
-
-    _print("Applying database schema...")
-    result = _docker_compose(
-        "exec",
-        "-T",
-        "postgres",
-        "psql",
-        "-U",
-        "finadvisor",
-        "-d",
-        "finadvisor",
-        "-f",
-        "/docker-entrypoint-initdb.d/01-schema.sql",
-        capture=True,
+    # Alembic owns the schema; the migrate job refuses (and explains the one-off stamp) when
+    # the database was built from schema.sql before migrations existed.
+    _print("Applying database migrations...")
+    result = subprocess.run(
+        [sys.executable, "-m", "src.entrypoint", "jobs", "migrate"],
+        cwd=str(BACKEND_DIR),
     )
     if result.returncode != 0:
-        _error(f"Schema apply failed:\n{result.stderr}")
+        _error("Database migration failed. Check output above.")
         sys.exit(1)
-    _print("Schema applied.")
+    _print("Database schema is at the latest revision.")
 
 
 def ensure_data_ingested() -> None:
