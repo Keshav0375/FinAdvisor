@@ -97,6 +97,8 @@ class Settings(BaseSettings):
 
     # Seconds /readyz waits for its database check (SELECT 1) before reporting it failing.
     readiness_timeout_s: float = _env("READINESS_TIMEOUT_S", default=2.0, gt=0)
+    # Seconds /readyz serves its last result (also a failing one) before probing again.
+    readiness_cache_ttl_s: float = _env("READINESS_CACHE_TTL_S", default=5.0, gt=0)
 
     # PII
     pii_mode: str = _env("PII_MODE", default="regex")

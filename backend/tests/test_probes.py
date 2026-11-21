@@ -3,20 +3,29 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import AsyncGenerator
+from datetime import UTC, date, datetime
 from types import TracebackType
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
+from src.api import probes
+from src.api.probes import ReadinessCache
 from src.config import Settings
-from src.main import create_app
+from src.main import create_app, lifespan
 
 DB_HOST = "db.test.invalid"
 RETIRED_ID = "claude-sonnet-4-20250514"
 DEPRECATED_ID = "claude-haiku-4-5"
-SECRET_MARKER = "boom-secret-marker-7731"
+RETIRING_ID = "claude-sonnet-4-5"
+SECRET_MARKER = "boom-secret-marker-7731"  # gitleaks:allow
+
+
+SLOW_YIELDS = 50
+CONCURRENT_CALLS = 10
 
 
 class StubSession:
@@ -43,6 +52,10 @@ class StubSession:
             raise ConnectionRefusedError(f"could not connect to {DB_HOST}: {SECRET_MARKER}")
         if self.behaviour == "hang":
             await asyncio.sleep(30)
+        if self.behaviour == "slow":
+            # Yield to the loop many times (no real sleep) so concurrent requests overlap.
+            for _ in range(SLOW_YIELDS):
+                await asyncio.sleep(0)
 
 
 class StubFactory:
@@ -162,5 +175,113 @@ def test_readiness_timeout_default_and_override(monkeypatch: pytest.MonkeyPatch)
 @pytest.mark.parametrize("bad", ["0", "-1"])
 def test_readiness_timeout_must_be_positive(monkeypatch: pytest.MonkeyPatch, bad: str) -> None:
     monkeypatch.setenv("READINESS_TIMEOUT_S", bad)
+    with pytest.raises(ValidationError):
+        Settings()  # type: ignore[call-arg]
+
+
+def _app_with(behaviour: str, clock: Any = None) -> tuple[Any, StubFactory]:
+    app = create_app()
+    app.state.settings = Settings()  # type: ignore[call-arg]
+    factory = StubFactory(behaviour)
+    app.state.db = factory
+    if clock is not None:
+        app.state.readiness_cache = ReadinessCache(clock=clock)
+    return app, factory
+
+
+async def test_concurrent_readyz_calls_share_one_db_probe() -> None:
+    app, factory = _app_with("slow")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        responses = await asyncio.gather(*(client.get("/readyz") for _ in range(CONCURRENT_CALLS)))
+    assert [r.status_code for r in responses] == [200] * CONCURRENT_CALLS
+    assert factory.session.statements == ["SELECT 1"]
+
+
+async def test_readyz_result_is_cached_until_ttl_then_probed_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("READINESS_CACHE_TTL_S", "5")
+    now = [100.0]
+    app, factory = _app_with("ok", clock=lambda: now[0])
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get("/readyz")
+        now[0] += 4.9
+        await client.get("/readyz")
+        assert len(factory.session.statements) == 1
+        now[0] += 0.2
+        await client.get("/readyz")
+    assert len(factory.session.statements) == 2
+
+
+async def test_failing_readyz_result_is_cached_for_the_ttl_too() -> None:
+    now = [0.0]
+    app, factory = _app_with("raise", clock=lambda: now[0])
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        first = await client.get("/readyz")
+        second = await client.get("/readyz")
+    assert first.status_code == second.status_code == 503
+    assert second.json()["checks"]["db"] == "fail"
+    assert len(factory.session.statements) == 1
+
+
+async def test_readiness_cache_lives_on_app_state_not_shared_between_apps() -> None:
+    first, first_factory = _app_with("ok")
+    second, second_factory = _app_with("ok")
+    for app in (first, second):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.get("/readyz")
+    assert len(first_factory.session.statements) == 1
+    assert len(second_factory.session.statements) == 1
+    assert first.state.readiness_cache is not second.state.readiness_cache
+
+
+@pytest.mark.parametrize(
+    ("today", "expected_status"),
+    [(date(2026, 1, 1), 200), (date(2026, 11, 15), 503)],
+)
+async def test_readyz_model_check_uses_utc_today(
+    monkeypatch: pytest.MonkeyPatch, today: date, expected_status: int
+) -> None:
+    # RETIRING_ID retires 2026-11-30: fine in January, retiring_soon in mid-November.
+    monkeypatch.setenv("LLM_MODEL_ANSWER", RETIRING_ID)
+    monkeypatch.setattr(probes, "_utc_today", lambda: today)
+    app, _ = _app_with("ok")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/readyz")
+    assert response.status_code == expected_status
+
+
+def test_utc_today_is_a_utc_date() -> None:
+    before = datetime.now(UTC).date()
+    assert before <= probes._utc_today() <= datetime.now(UTC).date()
+
+
+async def test_app_starts_with_retired_model_and_readyz_reports_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LLM_MODEL_ANSWER", RETIRED_ID)
+    app = create_app()
+    factory = StubFactory("ok")
+    with (
+        patch("src.main.build_engine", return_value=factory),
+        patch("src.main.VoyageEmbeddings", return_value=MagicMock()),
+        patch("src.main.create_redactor", return_value=MagicMock()),
+    ):
+        async with lifespan(app):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                ready = await client.get("/readyz")
+                live = await client.get("/healthz")
+    assert ready.status_code == 503
+    assert ready.json()["checks"] == {"db": "ok", "models": "fail"}
+    assert live.status_code == 200
+
+
+def test_readiness_cache_ttl_default_override_and_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert Settings().readiness_cache_ttl_s == 5.0  # type: ignore[call-arg]
+    monkeypatch.setenv("READINESS_CACHE_TTL_S", "1.5")
+    assert Settings().readiness_cache_ttl_s == 1.5  # type: ignore[call-arg]
+    monkeypatch.setenv("READINESS_CACHE_TTL_S", "0")
     with pytest.raises(ValidationError):
         Settings()  # type: ignore[call-arg]
