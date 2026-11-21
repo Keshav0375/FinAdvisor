@@ -28,6 +28,9 @@ REQUIRED_ENV_KEYS = (
     "JWT_SECRET",
 )
 
+# Seconds `docker compose up --wait` waits for healthchecks; override with COMPOSE_WAIT_TIMEOUT_S.
+DEFAULT_COMPOSE_WAIT_TIMEOUT_S = 300
+
 BANNER = """
 ====================================================
   FinAdvisor — Compliance-Aware Wealth Advisor
@@ -55,6 +58,14 @@ def _read_env_file() -> dict[str, str]:
                 key, _, val = line.partition("=")
                 env_vars[key.strip()] = val.strip().strip('"').strip("'")
     return env_vars
+
+
+def _compose_wait_timeout() -> str:
+    raw = os.environ.get("COMPOSE_WAIT_TIMEOUT_S", str(DEFAULT_COMPOSE_WAIT_TIMEOUT_S))
+    if not raw.isdigit() or int(raw) <= 0:
+        _error(f"COMPOSE_WAIT_TIMEOUT_S must be a positive number of seconds, got '{raw}'.")
+        sys.exit(1)
+    return raw
 
 
 def _docker_compose(*args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -143,7 +154,9 @@ def free_ports() -> None:
 def start_postgres() -> None:
     # --wait returns once the pg_isready healthcheck passes (or fails after its retries).
     _print("Starting PostgreSQL (pgvector)...")
-    result = _docker_compose("up", "-d", "--wait", "postgres")
+    result = _docker_compose(
+        "up", "-d", "--wait", "--wait-timeout", _compose_wait_timeout(), "postgres"
+    )
     if result.returncode != 0:
         _error("PostgreSQL did not become healthy. Check 'docker compose logs postgres'.")
         sys.exit(1)

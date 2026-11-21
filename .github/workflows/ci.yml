@@ -115,3 +115,31 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  compose:
+    # Brings the whole stack up with throwaway values and checks the acceptance criteria of
+    # docker-compose.yml (healthy services, stray listeners, probes, clean teardown).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: fa-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compose acceptance checks
+        # check_compose.sh builds its own throwaway .env from .env.example (never real secrets).
+        run: tests/compose/check_compose.sh
+
+      - name: Tear down
+        if: always()
+        # The script cleans up after itself; this covers a runner that is cancelled mid-run. Its
+        # env file is gone by now, so the throwaway values below only satisfy the required keys.
+        run: |
+          docker compose -p "$COMPOSE_PROJECT_NAME" --env-file .env.example down -v
+          docker compose -p "${COMPOSE_PROJECT_NAME}-other" --env-file .env.example down -v
+        env:
+          DB_USER: ci_user
+          DB_PASSWORD: ci-unused-db-pass
+          ANTHROPIC_API_KEY: ci-unused-anthropic-key
+          VOYAGE_API_KEY: ci-unused-voyage-key
+          JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij

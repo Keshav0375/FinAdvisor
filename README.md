@@ -13,8 +13,7 @@ graph TB
     Backend --> Agent[Agent Orchestrator]
     Agent --> PGVector[(PostgreSQL + pgvector :5432)]
     Agent --> Claude[Anthropic API]
-    Backend --> LangFuse[LangFuse :3030]
-    LangFuse --> LangFuseDB[(LangFuse DB :5433)]
+    Backend --> LangFuse[Langfuse Cloud]
     PGVector --> RLS{RLS Policies}
 
     subgraph Tools
@@ -37,7 +36,7 @@ User (browser)
       -> Agent Orchestrator -- ReAct loop, tool calls
         -> pgvector (RLS-filtered similarity search)
         -> Anthropic API (ANTHROPIC_BASE_URL) -- model ids from Settings
-      -> LangFuse (:3030) -- trace emitted per turn
+      -> Langfuse Cloud -- trace emitted per turn (when LANGFUSE_ENABLED=true)
 ```
 
 ## Tech Stack
@@ -49,7 +48,7 @@ User (browser)
 | Embeddings | Voyage AI (voyage-3) |
 | Agent | Anthropic SDK (ReAct loop, 4 tools) |
 | LLM access | Anthropic API direct (Kong gateway returns in E2) |
-| Observability | LangFuse (self-hosted, trace per query) |
+| Observability | Langfuse Cloud (trace per query, ADR-018) |
 | Frontend | Next.js 14, Tailwind CSS, zustand |
 | IaC | Terraform (GCP Cloud Run, Cloud SQL) |
 | CI | GitHub Actions (lint + eval gate) |
@@ -169,6 +168,11 @@ docker compose up -d --wait    # postgres, kafka, migrate (exits 0), api, fronte
 Host ports bind to `127.0.0.1` and come from `POSTGRES_HOST_PORT`, `KAFKA_HOST_PORT`,
 `API_HOST_PORT` and `FRONTEND_HOST_PORT` (defaults 5432, 9092, 8000, 3000; see `.env.example`),
 so a busy port or a second project (`docker compose -p other up`) needs only different values.
+`up --wait` waits `COMPOSE_WAIT_TIMEOUT_S` seconds (shell environment, default 300; used by the launcher and the compose check) before it gives up.
+
+The `backend` service is now `api`. A stack started before the rename needs
+`docker compose down --remove-orphans` once, so containers of the removed services
+(`backend`, `langfuse`, `langfuse-db`, `redis`) do not linger.
 
 A database built earlier from `schema.sql` (before migrations) has the tables but no
 `alembic_version` table. `jobs migrate` refuses it with exit 1 and never stamps on its own.
@@ -233,7 +237,6 @@ finadvisor/
   data/
     corpus/           50 synthetic financial documents
     eval/             50 golden Q&A pairs + judge prompt
-  langfuse/           Self-hosted LangFuse compose
 ```
 
 ## Documentation
