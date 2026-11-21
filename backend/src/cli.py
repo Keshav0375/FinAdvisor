@@ -62,7 +62,7 @@ def _read_env_file() -> dict[str, str]:
 
 def _compose_wait_timeout() -> str:
     raw = os.environ.get("COMPOSE_WAIT_TIMEOUT_S", str(DEFAULT_COMPOSE_WAIT_TIMEOUT_S))
-    if not raw.isdigit() or int(raw) <= 0:
+    if not raw.isdecimal() or int(raw) <= 0:
         _error(f"COMPOSE_WAIT_TIMEOUT_S must be a positive number of seconds, got '{raw}'.")
         sys.exit(1)
     return raw
@@ -184,7 +184,8 @@ def ensure_schema() -> None:
     # Alembic owns the schema. The migrate service (backend image, `jobs migrate`) refuses, and
     # explains the one-off stamp, when the database was built from schema.sql before migrations.
     _print("Applying database migrations (compose service 'migrate')...")
-    result = _docker_compose("up", "--no-deps", "--exit-code-from", "migrate", "migrate")
+    # --build so the migrations come from the current source, not a stale image.
+    result = _docker_compose("up", "--build", "--no-deps", "--exit-code-from", "migrate", "migrate")
     if result.returncode != 0:
         _error("Database migration failed. Check output above.")
         sys.exit(1)

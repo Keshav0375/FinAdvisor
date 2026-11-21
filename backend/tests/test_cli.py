@@ -55,7 +55,7 @@ def test_start_postgres_wait_timeout_comes_from_the_environment(
     assert calls[0][-3:-1] == ["--wait-timeout", "45"]
 
 
-@pytest.mark.parametrize("bad", ["0", "-3", "soon", ""])
+@pytest.mark.parametrize("bad", ["0", "-3", "soon", "", "\u00b2"])
 def test_a_bad_wait_timeout_exits_1_before_docker_runs(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], bad: str
 ) -> None:
@@ -84,7 +84,7 @@ def test_ensure_schema_runs_the_migrate_service(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(cli.subprocess, "run", _fake_compose(0, calls))
     cli.ensure_schema()
     assert calls == [
-        [*COMPOSE, "up", "--no-deps", "--exit-code-from", "migrate", "migrate"],
+        [*COMPOSE, "up", "--build", "--no-deps", "--exit-code-from", "migrate", "migrate"],
     ]
 
 

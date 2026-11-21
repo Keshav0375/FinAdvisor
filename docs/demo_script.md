@@ -7,7 +7,7 @@ Step-by-step walkthrough for recording a demo of the FinAdvisor system.
 - Backend running on `localhost:8000`
 - Frontend running on `localhost:3000`
 - Database seeded with 50 synthetic documents (114 chunks)
-- LangFuse running on `localhost:3030` (optional, for trace visibility)
+- Langfuse Cloud project with `LANGFUSE_ENABLED=true` and its keys in `.env` (optional, for trace visibility; ADR-018)
 
 ## Scene 1: Product Suitability (Sarah Chen, US Senior)
 
@@ -95,8 +95,8 @@ Step-by-step walkthrough for recording a demo of the FinAdvisor system.
 
 ## Scene 5 (Optional): LangFuse Tracing
 
-1. Open `http://localhost:3030` in a new tab
-2. Log in (admin@finadvisor.local / admin123)
+1. Open your Langfuse Cloud project (https://cloud.langfuse.com) in a new tab
+2. Log in with your Langfuse account
 3. Navigate to Traces
 4. Show the trace from Scene 1:
    - Top level: finadvisor_query trace with user metadata

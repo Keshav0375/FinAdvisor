@@ -2,7 +2,9 @@
 # Acceptance checks for docker-compose.yml (E0-T11).
 # Static checks (AC3, AC4) need only the docker CLI. Runtime checks (AC1, AC2, AC5, AC6) need a
 # running Docker daemon, network and python3, and run when RUNTIME=1 (default). RUNTIME=0 skips them.
-# Knobs: COMPOSE_PROJECT_NAME (default fa-compose-check), COMPOSE_WAIT_TIMEOUT_S (default 300).
+# Knobs: COMPOSE_PROJECT_NAME (default fa-compose-check), COMPOSE_WAIT_TIMEOUT_S (default 300),
+# COMPOSE_FILE (docker compose's own variable; CI sets docker-compose.yml so the dev override is
+# not merged and api and migrate run the same runtime image, ADR-019).
 # Usage: tests/compose/check_compose.sh   (from any directory)
 set -euo pipefail
 

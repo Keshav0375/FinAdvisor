@@ -123,6 +123,8 @@ jobs:
     timeout-minutes: 30
     env:
       COMPOSE_PROJECT_NAME: fa-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      # Only the base file: no docker-compose.override.yml, so api and migrate share the runtime image.
+      COMPOSE_FILE: docker-compose.yml
     steps:
       - uses: actions/checkout@v4
 
