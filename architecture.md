@@ -160,9 +160,6 @@ finadvisor/
 │   ├── config.yaml                 # Model routing + fallbacks
 │   └── Dockerfile
 │
-├── langfuse/
-│   └── docker-compose.langfuse.yml # LangFuse self-hosted
-│
 ├── data/
 │   ├── corpus/                     # Generated synthetic docs (JSON)
 │   │   ├── product_factsheets/
@@ -191,10 +188,10 @@ Port Allocation (local dev):
 8000  → FastAPI backend
 8001  → Kong AI Gateway
 4000  → LiteLLM proxy
-3030  → LangFuse web UI
 5432  → PostgreSQL (app DB, pgvector)
-5433  → PostgreSQL (LangFuse DB)
-6379  → Redis (optional, rate limiting)
+9092  → Kafka (KRaft, host listener)
+(Langfuse is Langfuse Cloud, ADR-018; no local Langfuse DB. Host ports are
+env-driven: POSTGRES_HOST_PORT, KAFKA_HOST_PORT, API_HOST_PORT, FRONTEND_HOST_PORT.)
 ```
 
 Request flow:
@@ -208,7 +205,7 @@ User (browser)
         → Kong (:8001) — token budget, PII guard
           → LiteLLM (:4000) — model routing + fallback
             → Claude / GPT-4o / Gemini
-      → LangFuse (:3030) — trace emitted per turn
+      → Langfuse Cloud — trace emitted per turn
 ```
 
 ---
@@ -1369,7 +1366,6 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://finadvisor:localdev@postgres:5432/finadvisor
       KONG_URL: http://kong:8000
-      LANGFUSE_HOST: http://langfuse:3000
       VOYAGE_API_KEY: ${VOYAGE_API_KEY}
       PII_MODE: regex         # Use regex fallback locally (no GCP DLP)
     depends_on:
@@ -1403,26 +1399,6 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
 
-  langfuse:
-    image: langfuse/langfuse:2
-    ports:
-      - "3030:3000"
-    environment:
-      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      NEXTAUTH_SECRET: mysecret
-      NEXTAUTH_URL: http://localhost:3030
-    depends_on:
-      - langfuse-db
-
-  langfuse-db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: langfuse
-      POSTGRES_USER: langfuse
-      POSTGRES_PASSWORD: langfuse
-    ports:
-      - "5433:5432"
-
 volumes:
   pgdata:
 ```
@@ -1454,7 +1430,7 @@ GCP_PROJECT_ID=finadvisor-prod    # Only needed for PII_MODE=gcp_dlp
 KONG_URL=http://localhost:8001
 
 # LangFuse
-LANGFUSE_HOST=http://localhost:3030
+LANGFUSE_HOST=https://cloud.langfuse.com
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 

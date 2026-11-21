@@ -50,8 +50,6 @@ out/
 
 # === Docker ===
 pgdata/
-langfuse_pgdata/
-redisdata/
 
 # === IDE ===
 .idea/

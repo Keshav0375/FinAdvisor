@@ -1,5 +1,7 @@
+# Dev overrides, merged automatically by `docker compose`. Only `api` uses the dev target (source
+# mounts, reload); `migrate` keeps the runtime image, which has the entrypoint and migrations.
 services:
-  backend:
+  api:
     build:
       context: ./backend
       target: dev
@@ -13,6 +15,6 @@ services:
   frontend:
     volumes:
       - ./frontend/src:/app/src
-    command: npm run dev
+    command: npm run dev -- -H 0.0.0.0 -p 3000
     environment:
       NODE_ENV: development
