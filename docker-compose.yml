@@ -1,89 +1,143 @@
+# Local stack: postgres, kafka, migrate (one-shot), api, frontend. `docker compose up -d --wait`
+# brings it up healthy. Host ports bind to 127.0.0.1 and are overridable (see .env.example), so
+# two projects (`-p`) run side by side. Required secrets have no default (G-25).
+
+x-backend-env: &backend-env
+  # Fixed inside the compose network.
+  - DB_HOST=postgres
+  - DB_PORT=5432
+  - PORT=8000
+  # Required, no default.
+  - DB_NAME=${DB_NAME:?set DB_NAME in .env}
+  - DB_USER=${DB_USER:?set DB_USER in .env}
+  - DB_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD in .env}
+  - DB_POOL_SIZE=${DB_POOL_SIZE:?set DB_POOL_SIZE in .env}
+  - DB_STATEMENT_TIMEOUT_MS=${DB_STATEMENT_TIMEOUT_MS:?set DB_STATEMENT_TIMEOUT_MS in .env}
+  - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+  - VOYAGE_API_KEY=${VOYAGE_API_KEY:?set VOYAGE_API_KEY in .env}
+  - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
+  - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+  # Optional Settings keys: passed through only when set, so config.py keeps the defaults.
+  - ENV_PROFILE
+  - DB_CONNECT_TIMEOUT_S
+  - LLM_MODEL_ANSWER
+  - LLM_MODEL_AUX
+  - LLM_MODEL_JUDGE
+  - LLM_MODEL_FALLBACK
+  - LLM_FALLBACK_ENABLED
+  - LLM_MAX_ITERATIONS
+  - MODEL_RETIRE_WARN_DAYS
+  - LANGFUSE_ENABLED
+  - LANGFUSE_HOST
+  - LANGFUSE_PUBLIC_KEY
+  - LANGFUSE_SECRET_KEY
+  - READINESS_TIMEOUT_S
+  - READINESS_CACHE_TTL_S
+  - PII_MODE
+  - GCP_PROJECT_ID
+
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.5-pg16
     environment:
       POSTGRES_DB: ${DB_NAME:?set DB_NAME in .env}
       POSTGRES_USER: ${DB_USER:?set DB_USER in .env}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  backend:
-    build: ./backend
+  # Single-node KRaft. Variables follow the official example
+  # apache/kafka docker/examples/docker-compose-files/single-node/plaintext/docker-compose.yml:
+  # PLAINTEXT is the in-network listener (kafka:19092), PLAINTEXT_HOST the host listener, advertised
+  # on KAFKA_HOST_PORT and published on the same number.
+  kafka:
+    image: apache/kafka:4.4.0
+    hostname: kafka
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${KAFKA_HOST_PORT:-9092}:${KAFKA_HOST_PORT:-9092}"
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:?set DB_NAME in .env}
-      DB_USER: ${DB_USER:?set DB_USER in .env}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-      DB_POOL_SIZE: ${DB_POOL_SIZE:?set DB_POOL_SIZE in .env}
-      DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:?set DB_STATEMENT_TIMEOUT_MS in .env}
-      LANGFUSE_HOST: http://langfuse:3000
-      VOYAGE_API_KEY: ${VOYAGE_API_KEY:?set VOYAGE_API_KEY in .env}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
-      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
-      PII_MODE: regex
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: CONTROLLER://:29093,PLAINTEXT://:19092,PLAINTEXT_HOST://:${KAFKA_HOST_PORT:-9092}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092,PLAINTEXT_HOST://localhost:${KAFKA_HOST_PORT:-9092}
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:19092 > /dev/null"]
+      interval: 10s
+      timeout: 20s
+      retries: 10
+      start_period: 20s
+
+  # One-shot: alembic upgrade head on the runtime image (ENTRYPOINT python -m src.entrypoint).
+  migrate:
+    build: ./backend
+    command: ["jobs", "migrate"]
+    restart: "no"
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
 
+  api:
+    build: ./backend
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Read by the browser, so it names the host port, not the compose service.
+      NEXT_PUBLIC_API_URL: http://localhost:${API_HOST_PORT:-8000}
     depends_on:
-      - backend
-
-  langfuse:
-    image: langfuse/langfuse:2
-    ports:
-      - "3030:3000"
-    environment:
-      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-langfuse-dev-secret}
-      NEXTAUTH_URL: http://localhost:3030
-      LANGFUSE_INIT_ORG_ID: finadvisor
-      LANGFUSE_INIT_PROJECT_ID: finadvisor-dev
-    depends_on:
-      langfuse-db:
+      api:
         condition: service_healthy
-
-  langfuse-db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: langfuse
-      POSTGRES_USER: langfuse
-      POSTGRES_PASSWORD: langfuse
-    ports:
-      - "5433:5432"
-    volumes:
-      - langfuse_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U langfuse"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
+      # node:20-slim has no curl; Node 20 has a global fetch. The dev server compiles on first hit.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 30s
+      retries: 10
+      start_period: 60s
 
 volumes:
   pgdata:
-  langfuse_pgdata:
-  redisdata:
+  kafkadata:
