@@ -58,7 +58,8 @@ def _read_env_file() -> dict[str, str]:
 
 
 def _docker_compose(*args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    cmd = ["docker", "compose", *args]
+    # Compose reads the same backend/.env as the launcher, so host ports and credentials agree.
+    cmd = ["docker", "compose", "--env-file", str(BACKEND_DIR / ".env"), *args]
     return subprocess.run(
         cmd,
         cwd=str(PROJECT_ROOT),
@@ -140,41 +141,25 @@ def free_ports() -> None:
 
 
 def start_postgres() -> None:
+    # --wait returns once the pg_isready healthcheck passes (or fails after its retries).
     _print("Starting PostgreSQL (pgvector)...")
-    _docker_compose("up", "-d", "postgres")
+    result = _docker_compose("up", "-d", "--wait", "postgres")
+    if result.returncode != 0:
+        _error("PostgreSQL did not become healthy. Check 'docker compose logs postgres'.")
+        sys.exit(1)
+    _print("PostgreSQL is ready.")
 
 
-def wait_for_postgres(timeout: int = 30) -> None:
-    _print("Waiting for PostgreSQL...")
-    start = time.time()
-    while time.time() - start < timeout:
-        result = _docker_compose(
-            "exec",
-            "-T",
-            "postgres",
-            "pg_isready",
-            "-U",
-            "finadvisor",
-            capture=True,
-        )
-        if result.returncode == 0:
-            _print("PostgreSQL is ready.")
-            return
-        time.sleep(1)
-    _error(f"PostgreSQL not ready after {timeout}s. Check 'docker compose logs postgres'.")
-    sys.exit(1)
-
-
-def _psql_query(query: str) -> tuple[int, str]:
+def _psql_query(query: str, env_vars: dict[str, str]) -> tuple[int, str]:
     result = _docker_compose(
         "exec",
         "-T",
         "postgres",
         "psql",
         "-U",
-        "finadvisor",
+        env_vars["DB_USER"],
         "-d",
-        "finadvisor",
+        env_vars["DB_NAME"],
         "-tAc",
         query,
         capture=True,
@@ -183,21 +168,18 @@ def _psql_query(query: str) -> tuple[int, str]:
 
 
 def ensure_schema() -> None:
-    # Alembic owns the schema; the migrate job refuses (and explains the one-off stamp) when
-    # the database was built from schema.sql before migrations existed.
-    _print("Applying database migrations...")
-    result = subprocess.run(
-        [sys.executable, "-m", "src.entrypoint", "jobs", "migrate"],
-        cwd=str(BACKEND_DIR),
-    )
+    # Alembic owns the schema. The migrate service (backend image, `jobs migrate`) refuses, and
+    # explains the one-off stamp, when the database was built from schema.sql before migrations.
+    _print("Applying database migrations (compose service 'migrate')...")
+    result = _docker_compose("up", "--no-deps", "--exit-code-from", "migrate", "migrate")
     if result.returncode != 0:
         _error("Database migration failed. Check output above.")
         sys.exit(1)
     _print("Database schema is at the latest revision.")
 
 
-def ensure_data_ingested() -> None:
-    rc, out = _psql_query("SELECT count(*) FROM chunks")
+def ensure_data_ingested(env_vars: dict[str, str]) -> None:
+    rc, out = _psql_query("SELECT count(*) FROM chunks", env_vars)
     if rc == 0 and out.isdigit() and int(out) > 0:
         _print(f"Data already ingested ({out} chunks) — skipping.")
         return
@@ -286,9 +268,8 @@ def main() -> None:
     free_ports()
 
     start_postgres()
-    wait_for_postgres()
     ensure_schema()
-    ensure_data_ingested()
+    ensure_data_ingested(env_vars)
 
     backend_proc = start_backend(env_vars)
     wait_for_backend()

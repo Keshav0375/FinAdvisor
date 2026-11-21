@@ -158,14 +158,17 @@ the image, `docker run fa-backend:test jobs migrate` and `docker run fa-backend:
 do the same. Migrations live in `backend/migrations/`; the database URL is never in
 `alembic.ini`, it comes from the settings below.
 
-Compose Postgres starts empty (no schema is loaded at init), so with Docker Compose run the
-migrate step once after `docker compose up`. The dev image (the default with
-`docker-compose.override.yml`) has no ENTRYPOINT, so name the module:
+Compose Postgres starts empty (no schema is loaded at init). The `migrate` service runs
+`jobs migrate` on the runtime image after Postgres is healthy, and `api` starts only once it
+exited 0, so one command brings the whole stack up healthy:
 
 ```bash
-docker compose up -d
-docker compose run --rm backend python -m src.entrypoint jobs migrate
+docker compose up -d --wait    # postgres, kafka, migrate (exits 0), api, frontend
 ```
+
+Host ports bind to `127.0.0.1` and come from `POSTGRES_HOST_PORT`, `KAFKA_HOST_PORT`,
+`API_HOST_PORT` and `FRONTEND_HOST_PORT` (defaults 5432, 9092, 8000, 3000; see `.env.example`),
+so a busy port or a second project (`docker compose -p other up`) needs only different values.
 
 A database built earlier from `schema.sql` (before migrations) has the tables but no
 `alembic_version` table. `jobs migrate` refuses it with exit 1 and never stamps on its own.
@@ -174,7 +177,7 @@ migrate again:
 
 ```bash
 cd backend && python -m alembic stamp 0001        # host, same DB settings as the app
-docker compose run --rm backend python -m alembic stamp 0001   # or in the dev container
+docker compose run api python -m alembic stamp 0001   # or in the dev container
 ```
 
 Settings added for this (env vars, see `.env.example`):
@@ -194,9 +197,8 @@ ruff check . --fix && ruff format . && mypy src/ && pytest tests/ -v
 # Run eval set
 python scripts/run_eval.py --eval-set ../data/eval/golden_qa.json
 
-# Start LangFuse (optional)
-docker compose -f langfuse/docker-compose.langfuse.yml up -d
-# Open http://localhost:3030 (admin@finadvisor.local / admin123)
+# Compose acceptance checks (static + runtime; RUNTIME=0 skips the Docker run)
+tests/compose/check_compose.sh
 
 # Frontend lint + build
 cd frontend
