@@ -27,20 +27,14 @@ variable "backend_image" {
   default     = "latest"
 }
 
+variable "anthropic_base_url" {
+  description = "Base URL the backend uses for the Anthropic API (direct, or a gateway egress route)"
+  type        = string
+  default     = "https://api.anthropic.com"
+}
+
 variable "frontend_image" {
   description = "Frontend container image tag"
-  type        = string
-  default     = "latest"
-}
-
-variable "litellm_image" {
-  description = "LiteLLM proxy container image tag"
-  type        = string
-  default     = "latest"
-}
-
-variable "kong_image" {
-  description = "Kong gateway container image tag"
   type        = string
   default     = "latest"
 }

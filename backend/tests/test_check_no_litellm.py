@@ -69,11 +69,17 @@ def test_allowlisted_paths_pass(tmp_path: Path) -> None:
             "TODO.md": "litellm history\n",
             "Story-Reports/5.1.md": "LiteLLM\n",
             "docs/threat_model.md": "LiteLLM\n",
-            "terraform/main.tf": "litellm\n",
             "backend/src/main.py": "print('ok')\n",
         },
     )
     assert _run(repo).returncode == 0
+
+
+def test_litellm_in_terraform_fails(tmp_path: Path) -> None:
+    repo = _make_repo(tmp_path, {"terraform/main.tf": "litellm\n"})
+    result = _run(repo)
+    assert result.returncode == 1
+    assert "terraform/main.tf" in result.stderr
 
 
 @pytest.mark.parametrize("dependency_file", ["backend/poetry.lock", "backend/pyproject.toml"])

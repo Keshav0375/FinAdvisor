@@ -6,7 +6,6 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Historical records, this script and its test keep the word on purpose.
-# terraform/ is removed by E0-T7, which also drops it from this list.
 # .claude/settings.local.json is a local tool-permission file, not project code.
 ALLOWLIST=(
   'Story-Reports/'
@@ -16,7 +15,6 @@ ALLOWLIST=(
   'docs/threat_model.md'
   'scripts/check_no_litellm.sh'
   'backend/tests/test_check_no_litellm.py'
-  'terraform/'
   '.claude/settings.local.json'
 )
 

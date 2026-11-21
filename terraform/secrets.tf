@@ -14,32 +14,8 @@ resource "google_secret_manager_secret" "anthropic_api_key" {
   }
 }
 
-resource "google_secret_manager_secret" "openai_api_key" {
-  secret_id = "finadvisor-openai-api-key"
-
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret" "google_api_key" {
-  secret_id = "finadvisor-google-api-key"
-
-  replication {
-    auto {}
-  }
-}
-
 resource "google_secret_manager_secret" "voyage_api_key" {
   secret_id = "finadvisor-voyage-api-key"
-
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret" "litellm_master_key" {
-  secret_id = "finadvisor-litellm-master-key"
 
   replication {
     auto {}

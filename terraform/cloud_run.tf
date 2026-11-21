@@ -42,11 +42,6 @@ resource "google_cloud_run_v2_service" "backend" {
       }
 
       env {
-        name  = "KONG_URL"
-        value = "http://localhost:8000"
-      }
-
-      env {
         name = "ANTHROPIC_API_KEY"
         value_source {
           secret_key_ref {
@@ -54,6 +49,11 @@ resource "google_cloud_run_v2_service" "backend" {
             version = "latest"
           }
         }
+      }
+
+      env {
+        name  = "ANTHROPIC_BASE_URL"
+        value = var.anthropic_base_url
       }
 
       env {
@@ -154,115 +154,6 @@ resource "google_cloud_run_v2_service" "frontend" {
       env {
         name  = "NEXT_PUBLIC_API_URL"
         value = google_cloud_run_v2_service.backend.uri
-      }
-    }
-  }
-}
-
-resource "google_cloud_run_v2_service" "litellm" {
-  name     = "finadvisor-litellm-${var.environment}"
-  location = var.region
-
-  template {
-    scaling {
-      min_instance_count = 0
-      max_instance_count = 3
-    }
-
-    containers {
-      image = "${local.registry}/litellm:${var.litellm_image}"
-
-      ports {
-        container_port = 4000
-      }
-
-      resources {
-        limits = {
-          cpu    = "1"
-          memory = "512Mi"
-        }
-      }
-
-      env {
-        name = "ANTHROPIC_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.anthropic_api_key.secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "OPENAI_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.openai_api_key.secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "GOOGLE_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.google_api_key.secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "LITELLM_MASTER_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.litellm_master_key.secret_id
-            version = "latest"
-          }
-        }
-      }
-    }
-  }
-}
-
-resource "google_cloud_run_v2_service" "kong" {
-  name     = "finadvisor-kong-${var.environment}"
-  location = var.region
-
-  template {
-    scaling {
-      min_instance_count = 0
-      max_instance_count = 3
-    }
-
-    containers {
-      image = "${local.registry}/kong:${var.kong_image}"
-
-      ports {
-        container_port = 8000
-      }
-
-      resources {
-        limits = {
-          cpu    = "1"
-          memory = "256Mi"
-        }
-      }
-
-      env {
-        name  = "KONG_DATABASE"
-        value = "off"
-      }
-
-      env {
-        name  = "KONG_DECLARATIVE_CONFIG"
-        value = "/etc/kong/kong.yml"
-      }
-
-      env {
-        name  = "KONG_PROXY_LISTEN"
-        value = "0.0.0.0:8000"
       }
     }
   }
