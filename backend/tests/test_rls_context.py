@@ -7,10 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.models import UserClaims
 from src.db.rls import set_rls_context
 
-from .conftest import requires_db
 
-
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_set_rls_context_sets_tier(db_session: AsyncSession) -> None:
     user = UserClaims(
@@ -26,7 +24,7 @@ async def test_set_rls_context_sets_tier(db_session: AsyncSession) -> None:
     assert result.scalar() == "3"
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_set_rls_context_sets_jurisdictions(db_session: AsyncSession) -> None:
     user = UserClaims(

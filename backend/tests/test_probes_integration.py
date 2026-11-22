@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import socket
 import time
-from urllib.parse import urlsplit
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -10,7 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from src.config import Settings
 from src.db.session import build_engine
 from src.main import create_app
-from tests.conftest import TEST_DATABASE_URL, requires_db
+from tests.conftest import TEST_DATABASE_URL
 
 CLOSED_PORT_BUDGET_S = 5.0
 
@@ -24,12 +23,12 @@ def _closed_port() -> int:
 
 def _client_for_db(monkeypatch: pytest.MonkeyPatch, host: str, port: int) -> AsyncClient:
     """App (no lifespan) whose engine is built from Settings pointing at host:port."""
-    parts = urlsplit(TEST_DATABASE_URL)
+    assert TEST_DATABASE_URL is not None
     monkeypatch.setenv("DB_HOST", host)
     monkeypatch.setenv("DB_PORT", str(port))
-    monkeypatch.setenv("DB_NAME", (parts.path or "/postgres").lstrip("/"))
-    monkeypatch.setenv("DB_USER", parts.username or "postgres")
-    monkeypatch.setenv("DB_PASSWORD", parts.password or "postgres-test-pass")
+    monkeypatch.setenv("DB_NAME", TEST_DATABASE_URL.database or "")
+    monkeypatch.setenv("DB_USER", TEST_DATABASE_URL.username or "")
+    monkeypatch.setenv("DB_PASSWORD", TEST_DATABASE_URL.password or "")
     settings = Settings()  # type: ignore[call-arg]
     app = create_app()
     app.state.settings = settings
@@ -37,18 +36,20 @@ def _client_for_db(monkeypatch: pytest.MonkeyPatch, host: str, port: int) -> Asy
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
-@requires_db
+@pytest.mark.integration
+@pytest.mark.usefixtures("postgres_available")
 async def test_readyz_200_against_real_postgres(monkeypatch: pytest.MonkeyPatch) -> None:
-    parts = urlsplit(TEST_DATABASE_URL)
+    assert TEST_DATABASE_URL is not None
     async with _client_for_db(
-        monkeypatch, parts.hostname or "localhost", parts.port or 5432
+        monkeypatch, TEST_DATABASE_URL.host or "", TEST_DATABASE_URL.port or 0
     ) as client:
         response = await client.get("/readyz")
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "checks": {"db": "ok", "models": "ok"}}
 
 
-@requires_db
+@pytest.mark.integration
+@pytest.mark.usefixtures("postgres_available")
 async def test_readyz_503_within_5s_on_closed_port(monkeypatch: pytest.MonkeyPatch) -> None:
     async with _client_for_db(monkeypatch, "127.0.0.1", _closed_port()) as client:
         started = time.monotonic()
