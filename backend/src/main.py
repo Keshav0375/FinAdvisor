@@ -93,8 +93,10 @@ def create_app() -> FastAPI:
     app.add_exception_handler(FinAdvisorError, finadvisor_exception_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
+    from src.api.probes import router as probes_router
     from src.api.router import api_router
 
+    app.include_router(probes_router)
     app.include_router(api_router, prefix="/api")
 
     return app

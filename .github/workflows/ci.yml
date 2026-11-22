@@ -115,3 +115,64 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  compose:
+    # Brings the whole stack up with throwaway values and checks the acceptance criteria of
+    # docker-compose.yml (healthy services, stray listeners, probes, clean teardown).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: fa-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      # Only the base file: no docker-compose.override.yml, so api and migrate share the runtime image.
+      COMPOSE_FILE: docker-compose.yml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compose acceptance checks
+        # check_compose.sh builds its own throwaway .env from .env.example (never real secrets).
+        run: tests/compose/check_compose.sh
+
+      - name: Tear down
+        if: always()
+        # The script cleans up after itself; this covers a runner that is cancelled mid-run. Its
+        # env file is gone by now, so the throwaway values below only satisfy the required keys.
+        run: |
+          docker compose -p "$COMPOSE_PROJECT_NAME" --env-file .env.example down -v
+          docker compose -p "${COMPOSE_PROJECT_NAME}-other" --env-file .env.example down -v
+        env:
+          DB_USER: ci_user
+          DB_PASSWORD: ci-unused-db-pass
+          ANTHROPIC_API_KEY: ci-unused-anthropic-key
+          VOYAGE_API_KEY: ci-unused-voyage-key
+          JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
+
+  stub-chat-api:
+    # Test tooling for the gateway epic (tools/stub-chat-api): lint, format, unit tests with a
+    # coverage floor, and the image acceptance script (build, run, curl, docker stop).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/stub-chat-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Unit tests
+        run: pytest --cov=app --cov=config --cov=serve --cov=tokens --cov-fail-under=80
+
+      - name: Image acceptance checks
+        run: bash tests/check_image.sh

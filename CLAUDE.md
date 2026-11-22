@@ -32,7 +32,7 @@ Changes to this stack require explicit human approval:
 | Embeddings | Voyage AI (voyage-3) | 1024 dims |
 | Agent | Anthropic SDK (direct) | latest |
 | LLM Gateway | None (Anthropic direct); Kong returns in E2 | n/a |
-| Observability | LangFuse (self-hosted) | 2.x |
+| Observability | Langfuse Cloud (ADR-018; not self-hosted) | n/a |
 | Frontend | Next.js (App Router) | 14 |
 | Styling | Tailwind CSS | 3.x |
 | State | Zustand | latest |

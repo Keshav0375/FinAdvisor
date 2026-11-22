@@ -7,6 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Historical records, this script and its test keep the word on purpose.
 # .claude/settings.local.json is a local tool-permission file, not project code.
+# tests/compose/check_compose.sh asserts that no litellm image is in the compose file.
 ALLOWLIST=(
   'Story-Reports/'
   'TODO.md'
@@ -15,6 +16,7 @@ ALLOWLIST=(
   'docs/threat_model.md'
   'scripts/check_no_litellm.sh'
   'backend/tests/test_check_no_litellm.py'
+  'tests/compose/check_compose.sh'
   '.claude/settings.local.json'
 )
 
