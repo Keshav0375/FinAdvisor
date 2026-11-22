@@ -279,11 +279,14 @@ def test_integration_selection_lists_every_former_requires_db_test() -> None:
 # AC3, dry run of the Makefile
 
 
-def _make_dry_run(target: str) -> str:
+def _make_dry_run(target: str, **env: str) -> str:
+    """`make -n <target>` output; ENV_FILE defaults to .env.example unless a test passes one."""
     assert shutil.which("make"), "make is required to check the Makefile"
+    base = {k: v for k, v in os.environ.items() if k not in {"ENV_FILE", "COMPOSE_WAIT_TIMEOUT_S"}}
+    env = {"ENV_FILE": str(REPO_ROOT / ".env.example"), **env}
     result = subprocess.run(
         ["make", "-n", "-C", str(REPO_ROOT), target],
-        env={**os.environ, "ENV_FILE": str(REPO_ROOT / ".env.example")},
+        env={**base, **env},
         capture_output=True,
         text=True,
         timeout=SUBPROCESS_TIMEOUT_S,
@@ -293,7 +296,12 @@ def _make_dry_run(target: str) -> str:
 
 
 def test_make_deps_up_starts_postgres_kafka_and_migrate() -> None:
-    assert "up -d --wait postgres kafka migrate" in _make_dry_run("deps-up")
+    assert "up -d --wait --wait-timeout 300 postgres kafka migrate" in _make_dry_run("deps-up")
+
+
+def test_make_wait_timeout_is_a_variable() -> None:
+    plan = _make_dry_run("deps-up", COMPOSE_WAIT_TIMEOUT_S="7")
+    assert "--wait-timeout 7 postgres" in plan
 
 
 def test_make_deps_down_removes_containers_and_volumes() -> None:
@@ -309,4 +317,66 @@ def test_make_test_integration_requires_services_and_always_tears_down() -> None
     assert "REQUIRE_SERVICES=1" in plan
     assert "-m integration" in plan
     assert re.search(r"trap '.*down -v.*' EXIT", plan)
-    assert "up -d --wait postgres kafka migrate" in plan
+    assert "up -d --wait --wait-timeout 300 postgres kafka migrate" in plan
+
+
+def test_make_test_integration_defaults_to_the_demo_env_file() -> None:
+    assert _default_env_file() == str(REPO_ROOT / ".env.integration")
+
+
+def _default_env_file() -> str:
+    """The --env-file of the test-integration plan when ENV_FILE is not set."""
+    base = {k: v for k, v in os.environ.items() if k != "ENV_FILE"}
+    result = subprocess.run(
+        ["make", "-n", "-C", str(REPO_ROOT), "test-integration"],
+        env=base,
+        capture_output=True,
+        text=True,
+        timeout=SUBPROCESS_TIMEOUT_S,
+    )
+    assert result.returncode == 0, result.stderr
+    match = re.search(r"--env-file (\S+) up", result.stdout)
+    assert match, result.stdout
+    return match.group(1)
+
+
+def test_make_test_integration_env_file_is_overridable_and_absolute() -> None:
+    plan = _make_dry_run("test-integration", ENV_FILE="backend/../.env.example")
+    env_files = set(re.findall(r"--env-file (\S+)", plan))
+    assert env_files == {str(REPO_ROOT / ".env.example")}, "the trap must not use a relative path"
+
+
+def test_make_other_targets_default_to_dot_env() -> None:
+    base = {k: v for k, v in os.environ.items() if k != "ENV_FILE"}
+    result = subprocess.run(
+        ["make", "-n", "-C", str(REPO_ROOT), "deps-up"],
+        env=base,
+        capture_output=True,
+        text=True,
+        timeout=SUBPROCESS_TIMEOUT_S,
+    )
+    assert result.returncode == 0, result.stderr
+    assert f"--env-file {REPO_ROOT / '.env'} " in result.stdout
+
+
+# The committed demo env file
+
+
+def _read_env_file(path: Path) -> dict[str, str]:
+    pairs = (line.split("=", 1) for line in path.read_text().splitlines() if "=" in line)
+    return {key: value for key, value in pairs if not key.startswith("#")}
+
+
+def test_demo_env_file_boots_settings_without_real_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = _read_env_file(REPO_ROOT / ".env.integration")
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert len(settings.jwt_secret.get_secret_value()) >= 32
+    assert values["DB_PORT"] == values["POSTGRES_HOST_PORT"]
+    # The broker's in-network (19092) and controller (29093) listeners already use these ports.
+    assert values["KAFKA_HOST_PORT"] not in {"19092", "29093"}
+    assert not any("replace_me" in value.lower() for value in values.values())
+    assert not any(value.startswith(("sk-", "pa-")) for value in values.values())
