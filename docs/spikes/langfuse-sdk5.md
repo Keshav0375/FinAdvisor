@@ -1,20 +1,31 @@
 # Spike E0-T1: Langfuse Python SDK 5.x with masking
 
-Verdict: fail (BLOCKED: real Langfuse keys pending (K2))
+Verdict: pass (demo: local OTLP capture); confirm on Langfuse Cloud when K2 keys exist
 
-"fail" here means the Cloud-acceptance criterion is not proven yet, not that the SDK misbehaves. The
-live run against Langfuse Cloud could not happen: the local `.env` still points `LANGFUSE_HOST` at a
-self-hosted address (`http://localhost:3030`, nothing listening, connection refused) and the keys are
-16-character placeholders. The SDK-side behaviour was verified offline (below). Re-run
-`cd backend && poetry run python scripts/spike_langfuse_v5.py` once real Cloud keys are in the
-environment; exit 0 flips this verdict to pass. E0-T8 (the wrapper) must wait for that run.
+The demo run needs no account. The real 5.1.0 SDK exports to an in-process OTLP/HTTP receiver on
+127.0.0.1 with the stand-in keys `demo-public-key` / `demo-secret-key`. The masking function ran before
+export, and no sensitive value reached the exported spans (checked on the decoded spans and on every
+raw payload byte). What the demo does not prove: that Langfuse Cloud accepts the SDK 5.x export and
+serves the trace back over its API. That needs real Cloud keys (K2) and has not been run.
+
+Commands (from `backend/`):
+
+- Demo (no account, runs in the unit tests too):
+  `poetry run python scripts/spike_langfuse_v5.py --demo` -> `PASS (demo: local OTLP capture)`, exit 0.
+  With `--no-mask` it must fail: exit 1 and `SPIKE-SSN found ...` lines.
+- Real run, once `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` hold the Cloud values:
+  `poetry run python scripts/spike_langfuse_v5.py --live` -> exit 0 confirms the Cloud verdict. Also
+  run it with `--no-mask` (must exit 1) and once with a wrong secret (must exit 2).
+  Same check as a test: `LIVE_API_TESTS=1 poetry run pytest tests/test_spike_langfuse_v5.py -m live`.
+
+E0-T8 (the wrapper) may build on the demo verdict; the Cloud run confirms it.
 
 ## Versions and host
 
 - Installed SDK: `langfuse` 5.1.0 (exact pin in `backend/pyproject.toml`; 5.2.0 also exists on PyPI,
   ADR-018 names 5.1.0). Poetry 2.1.2, Python 3.12.16.
-- Host used for the live attempt: value of `LANGFUSE_HOST` in the local `.env`, as is
-  (`http://localhost:3030`). Region: not applicable (no Cloud project reached). Cloud region
+- Host: demo mode uses a loopback receiver (`http://127.0.0.1:<free port>`). The live run uses
+  `LANGFUSE_HOST` as set. Region: not applicable yet (no Cloud project reached). Cloud region
   (US or EU) is decided per cell in ADR-031.
 - The 5.x bump also moves the OpenTelemetry packages (1.41.1 to 1.45.2, new
   `opentelemetry-exporter-otlp-common` and `opentelemetry-exporter-http-transport` 0.66b2).
@@ -41,16 +52,24 @@ environment; exit 0 flips this verdict to pass. E0-T8 (the wrapper) must wait fo
 Both `capture_input` and `capture_output` are passed to `@observe` (the decorator form); the masking
 hook is a client constructor argument, not a decorator argument.
 
-## What was verified offline (no Cloud)
+## What was verified without Cloud
 
-- 28 unit tests in `backend/tests/test_spike_langfuse_v5.py` (no network): mask function, trace
+- Demo mode (`--demo`, also run by the unit tests): the real 5.1.0 SDK, the real masking hook and
+  the real OTLP exporter send to `OtlpSink`, an in-process receiver on 127.0.0.1. The hook is wrapped
+  to record that it ran. The SDK gets its own `TracerProvider`, because the SDK otherwise attaches
+  every client's exporter to the process-wide provider and a second run in one process would also
+  export to the first run's closed receiver. Checks, all in `evaluate_capture`:
+  - the masking function ran at least once before the spans arrived;
+  - `spike-normal` input and output carry `[REDACTED]` and no `SPIKE-SSN` text;
+  - `spike-sensitive` and `spike-root` carry no `langfuse.observation.input` or `.output` attribute;
+  - no `SPIKE-SSN` byte appears anywhere in any received payload (names, events, resource attributes
+    included).
+  With `--no-mask` the same checks fail with exit 1 (`SPIKE-SSN` in clear), which shows the check
+  can fail.
+- 36 tests in `backend/tests/test_spike_langfuse_v5.py`: the demo path above, mask function, trace
   evaluation (marker leak, non-empty sensitive span, missing span), polling, HTTP error mapping,
-  exit codes including the `--no-mask` leak giving exit 1 and an auth error giving exit 2.
-- A scratch local OTLP sink (not committed) received the spans the real 5.1.0 SDK exported:
-  - with masking: `spike-normal` input `{"args": ["customer ssn [REDACTED]"], "kwargs": {}}` and
-    output `echo: customer ssn [REDACTED]`; `spike-sensitive` and `spike-root` carried no
-    `langfuse.observation.input` or `.output` attribute at all.
-  - without masking (`--no-mask` path): the same spans carried `SPIKE-SSN-123-45-6789` in clear.
+  exit codes including the `--no-mask` leak giving exit 1 and an auth error giving exit 2. One test
+  is marked `live` (skipped unless `LIVE_API_TESTS=1`): the real Cloud run.
 
 ## Limitations and notes
 

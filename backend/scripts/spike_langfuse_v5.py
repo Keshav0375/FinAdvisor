@@ -6,26 +6,36 @@ Creates one trace with
   (b) a sensitive span created with `capture_input=False, capture_output=False`.
 It flushes, then polls GET {host}/api/public/traces/{id} (basic auth) and checks the result.
 
-Reads LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST from the environment (the typed
-Settings keys arrive in E0-T3/E0-T8). Key values are never printed or logged.
+Two modes, one of them required:
+  --demo  needs no account: the SDK exports to an in-process OTLP/HTTP receiver on 127.0.0.1 with
+          the demo keys below, and the captured spans are checked (masking function ran before
+          export, no sensitive value in any exported byte).
+  --live  the real run against Langfuse Cloud. Reads LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY,
+          LANGFUSE_HOST from the environment (the typed Settings keys arrive in E0-T3/E0-T8).
+
+Key values are never printed or logged.
 
 Exit codes: 0 pass, 1 check failed (leak or missing trace data), 2 auth, transport or config error.
 
-Usage: poetry run python scripts/spike_langfuse_v5.py [--no-mask]
+Usage: poetry run python scripts/spike_langfuse_v5.py (--demo | --live) [--no-mask]
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import gzip
 import json
 import os
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import TracebackType
 from typing import Any
 
 # Spike knobs (a throwaway script: the app's Settings class does not carry them).
@@ -38,6 +48,14 @@ ROOT_SPAN = "spike-root"
 DEFAULT_POLL_TIMEOUT_S = 60.0
 DEFAULT_POLL_INTERVAL_S = 3.0
 DEFAULT_HTTP_TIMEOUT_S = 15.0
+
+# Demo mode knobs: fixed non-secret stand-ins, and a receiver bound to loopback only.
+DEMO_PUBLIC_KEY = "demo-public-key"
+DEMO_SECRET_KEY = "demo-secret-key"
+DEMO_BIND_HOST = "127.0.0.1"
+DEMO_BIND_PORT = 0  # 0 = the OS picks a free port, so two runs never clash
+DEMO_POLL_INTERVAL_S = 0.05  # how fast the receiver notices its shutdown request
+OTLP_TRACES_PATH = "/api/public/otel/v1/traces"
 
 # Attribute keys the 5.1.0 SDK writes span input/output to (langfuse/_client/attributes.py:42-43).
 INPUT_KEY = "langfuse.observation.input"
@@ -179,15 +197,29 @@ def poll_trace(
         sleep(interval)
 
 
-def run_spike(host: str, public_key: str, secret_key: str, *, mask: bool) -> str:
-    """Create the spike trace through the SDK and return its trace id."""
+def run_spike(
+    host: str,
+    public_key: str,
+    secret_key: str,
+    *,
+    mask: bool,
+    mask_fn: Callable[..., Any] | None = None,
+    tracer_provider: Any = None,
+) -> str:
+    """Create the spike trace through the SDK and return its trace id.
+
+    `mask_fn` replaces `mask_otel_spans` as the export hook (the demo passes a recording wrapper).
+    `tracer_provider` keeps the run off the process-wide OpenTelemetry provider (the SDK otherwise
+    attaches every client's exporter to it, so a second client in one process also feeds the first).
+    """
     from langfuse import Langfuse, observe
 
     client = Langfuse(
         public_key=public_key,
         secret_key=secret_key,
         base_url=host,
-        mask_otel_spans=mask_otel_spans if mask else None,
+        mask_otel_spans=(mask_fn or mask_otel_spans) if mask else None,
+        tracer_provider=tracer_provider,
     )
     trace_ids: list[str] = []
 
@@ -214,8 +246,152 @@ def run_spike(host: str, public_key: str, secret_key: str, *, mask: bool) -> str
     return trace_ids[0]
 
 
+class OtlpSink:
+    """In-process OTLP/HTTP receiver: keeps the raw body of every trace export it receives."""
+
+    def __init__(self, bind_host: str = DEMO_BIND_HOST, port: int = DEMO_BIND_PORT) -> None:
+        self.bodies: list[bytes] = []
+        self._lock = threading.Lock()
+        sink = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:  # noqa: N802 (http.server API)
+                raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                if self.headers.get("Content-Encoding") == "gzip":
+                    raw = gzip.decompress(raw)
+                if self.path == OTLP_TRACES_PATH:
+                    sink.record(raw)
+                    content_type, reply = "application/x-protobuf", b""
+                else:
+                    content_type, reply = "application/json", b"{}"
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(reply)))
+                self.end_headers()
+                self.wfile.write(reply)
+
+            def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+                return
+
+        self._server = ThreadingHTTPServer((bind_host, port), Handler)
+        self._thread = threading.Thread(
+            target=self._server.serve_forever,
+            kwargs={"poll_interval": DEMO_POLL_INTERVAL_S},
+            daemon=True,
+        )
+
+    def record(self, body: bytes) -> None:
+        with self._lock:
+            self.bodies.append(body)
+
+    @property
+    def url(self) -> str:
+        host, port = self._server.server_address[:2]
+        return f"http://{host!s}:{port}"
+
+    def __enter__(self) -> OtlpSink:
+        self._thread.start()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join()
+
+
+def spans_from_bodies(bodies: list[bytes]) -> list[dict[str, Any]]:
+    """Decode OTLP export requests into {name, attributes} dicts (string attributes only)."""
+    from google.protobuf.message import DecodeError
+    from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+
+    spans: list[dict[str, Any]] = []
+    for body in bodies:
+        request = ExportTraceServiceRequest()
+        try:
+            request.ParseFromString(body)
+        except DecodeError as exc:
+            raise SpikeError("captured export is not a valid OTLP request") from exc
+        for resource_spans in request.resource_spans:
+            for scope_spans in resource_spans.scope_spans:
+                for span in scope_spans.spans:
+                    attributes = {
+                        kv.key: kv.value.string_value
+                        for kv in span.attributes
+                        if kv.value.HasField("string_value")
+                    }
+                    spans.append({"name": span.name, "attributes": attributes})
+    return spans
+
+
+def trace_from_spans(spans: list[dict[str, Any]]) -> dict[str, Any]:
+    """Shape captured spans like the Langfuse trace API body so `evaluate_trace` applies."""
+    return {
+        "input": None,
+        "output": None,
+        "observations": [
+            {
+                "name": span["name"],
+                "input": span["attributes"].get(INPUT_KEY),
+                "output": span["attributes"].get(OUTPUT_KEY),
+            }
+            for span in spans
+        ],
+    }
+
+
+def evaluate_capture(bodies: list[bytes], mask_calls: list[int], *, mask: bool) -> list[str]:
+    """Return the reasons a local capture fails the demo check (empty list means pass)."""
+    problems = evaluate_trace(trace_from_spans(spans_from_bodies(bodies)))
+    if any(MARKER_PREFIX.encode() in body for body in bodies):
+        problems.append(f"{MARKER_PREFIX} found in the raw exported payload")
+    if mask and not mask_calls:
+        problems.append("masking function never ran before export")
+    return problems
+
+
+def reset_langfuse_clients() -> None:
+    """Drop the SDK's per-public-key client singletons so a later run builds a fresh client."""
+    from langfuse._client.resource_manager import LangfuseResourceManager
+
+    LangfuseResourceManager.reset()
+
+
+def run_demo(*, mask: bool) -> list[str]:
+    """Run the spike against a local OTLP receiver with demo keys; return the problems found."""
+    from opentelemetry.sdk.trace import TracerProvider
+
+    mask_calls: list[int] = []
+
+    def recording_mask(*, params: Any) -> Any:
+        mask_calls.append(len(params.spans))
+        return mask_otel_spans(params=params)
+
+    with OtlpSink() as sink:
+        try:
+            run_spike(
+                sink.url,
+                DEMO_PUBLIC_KEY,
+                DEMO_SECRET_KEY,
+                mask=mask,
+                mask_fn=recording_mask,
+                tracer_provider=TracerProvider(),
+            )
+        finally:
+            reset_langfuse_clients()
+        bodies = list(sink.bodies)
+    return evaluate_capture(bodies, mask_calls, mask=mask)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--demo", action="store_true", help="local OTLP capture, no account needed")
+    mode.add_argument("--live", action="store_true", help="real run against Langfuse Cloud")
     parser.add_argument("--no-mask", action="store_true", help="skip mask_otel_spans (must fail)")
     parser.add_argument("--poll-timeout", type=float, default=DEFAULT_POLL_TIMEOUT_S)
     parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_S)
@@ -233,6 +409,18 @@ def read_credentials(env: Mapping[str, str]) -> tuple[str, str, str]:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.demo:
+        try:
+            problems = run_demo(mask=not args.no_mask)
+        except SpikeError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        for problem in problems:
+            print(f"FAIL: {problem}")
+        if problems:
+            return EXIT_CHECK_FAILED
+        print("PASS (demo: local OTLP capture): no sensitive value reached the exported spans")
+        return EXIT_OK
     try:
         host, public_key, secret_key = read_credentials(os.environ)
         trace_id = run_spike(host, public_key, secret_key, mask=not args.no_mask)

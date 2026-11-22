@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import gzip
 import io
 import json
+import os
 import urllib.error
+import urllib.request
 from types import MappingProxyType
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
 
 from scripts import spike_langfuse_v5 as spike
 from scripts.spike_langfuse_v5 import (
@@ -258,10 +262,19 @@ def test_read_credentials_lists_missing_names_only() -> None:
 
 
 def test_parse_args_defaults_and_no_mask() -> None:
-    args = parse_args([])
+    args = parse_args(["--live"])
+    assert args.live
+    assert not args.demo
     assert not args.no_mask
     assert args.poll_timeout == spike.DEFAULT_POLL_TIMEOUT_S
-    assert parse_args(["--no-mask"]).no_mask
+    assert parse_args(["--live", "--no-mask"]).no_mask
+
+
+def test_parse_args_requires_exactly_one_mode() -> None:
+    assert parse_args(["--demo"]).demo
+    for argv in ([], ["--demo", "--live"]):
+        with pytest.raises(SystemExit):
+            parse_args(argv)
 
 
 ENV = {"LANGFUSE_HOST": "https://h.example", "LANGFUSE_PUBLIC_KEY": "p", "LANGFUSE_SECRET_KEY": "s"}
@@ -274,7 +287,7 @@ def _run_main(
         monkeypatch.setenv(key, value)
     monkeypatch.setattr(spike, "run_spike", lambda *a, **k: "trace-1")
     monkeypatch.setattr(spike, "fetch_trace", lambda *a, **k: trace)
-    return main((argv or []) + ["--poll-timeout", "0"])
+    return main(["--live", *(argv or []), "--poll-timeout", "0"])
 
 
 def test_main_exit_0_and_prints_trace_id(
@@ -297,7 +310,7 @@ def test_main_exit_2_on_missing_env_and_auth_error(
 ) -> None:
     for key in ENV:
         monkeypatch.delenv(key, raising=False)
-    assert main([]) == 2
+    assert main(["--live"]) == 2
     for key, value in ENV.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setattr(spike, "run_spike", lambda *a, **k: "trace-1")
@@ -306,7 +319,7 @@ def test_main_exit_2_on_missing_env_and_auth_error(
         raise SpikeError("Langfuse API rejected the key pair (HTTP 401)")
 
     monkeypatch.setattr(spike, "fetch_trace", reject)
-    assert main(["--poll-timeout", "0"]) == 2
+    assert main(["--live", "--poll-timeout", "0"]) == 2
     assert "rejected" in capsys.readouterr().err
 
 
@@ -321,6 +334,7 @@ def test_run_spike_builds_client_with_masking_and_returns_trace_id() -> None:
         assert spike.run_spike("https://h.example", "p", "s", mask=True) == "abc123"
         assert ctor.call_args.kwargs["mask_otel_spans"] is mask_otel_spans
         assert ctor.call_args.kwargs["base_url"] == "https://h.example"
+        assert ctor.call_args.kwargs["tracer_provider"] is None
         spike.run_spike("https://h.example", "p", "s", mask=False)
         assert ctor.call_args.kwargs["mask_otel_spans"] is None
     fake_client.flush.assert_called()
@@ -335,3 +349,98 @@ def test_run_spike_raises_without_trace_id() -> None:
         pytest.raises(SpikeError, match="no trace id"),
     ):
         spike.run_spike("https://h.example", "p", "s", mask=True)
+
+
+# --- demo mode: real 5.1.0 SDK exporting to a local in-process OTLP receiver ----------------
+# Loopback only, no account and no network. The SDK, the masking hook and the exporter are real.
+
+
+def _post(url: str, body: bytes, headers: dict[str, str] | None = None) -> bytes:
+    request = urllib.request.Request(url, data=body, headers=headers or {}, method="POST")
+    with urllib.request.urlopen(request, timeout=5) as response:  # noqa: S310 (loopback sink)
+        return response.read()
+
+
+def test_otlp_sink_records_trace_bodies_and_ungzips_and_ignores_other_paths() -> None:
+    with spike.OtlpSink() as sink:
+        assert sink.url.startswith("http://127.0.0.1:")
+        assert _post(sink.url + spike.OTLP_TRACES_PATH, b"plain") == b""
+        gz = {"Content-Encoding": "gzip"}
+        assert _post(sink.url + spike.OTLP_TRACES_PATH, gzip.compress(b"zipped"), gz) == b""
+        assert _post(sink.url + "/api/public/other", b"ignored") == b"{}"
+    assert sink.bodies == [b"plain", b"zipped"]
+
+
+def test_spans_from_bodies_rejects_garbage() -> None:
+    with pytest.raises(SpikeError, match="not a valid OTLP"):
+        spike.spans_from_bodies([b"\xff\xff\xff"])
+
+
+def test_evaluate_capture_flags_missing_masking_and_raw_leak() -> None:
+    problems = spike.evaluate_capture([], [], mask=True)
+    assert "masking function never ran before export" in problems
+    no_mask = spike.evaluate_capture([], [], mask=False)
+    assert "masking function never ran before export" not in no_mask
+    assert f"observation '{NORMAL_SPAN}' missing from trace" in no_mask
+
+
+def test_demo_real_sdk_masks_before_export_and_capture_off_sends_nothing() -> None:
+    with spike.OtlpSink() as sink:
+        try:
+            spike.run_spike(
+                sink.url,
+                spike.DEMO_PUBLIC_KEY,
+                spike.DEMO_SECRET_KEY,
+                mask=True,
+                tracer_provider=TracerProvider(),
+            )
+        finally:
+            spike.reset_langfuse_clients()
+        bodies = list(sink.bodies)
+    by_name = {s["name"]: s["attributes"] for s in spike.spans_from_bodies(bodies)}
+    assert {NORMAL_SPAN, SENSITIVE_SPAN} <= set(by_name)
+    assert REDACTED in by_name[NORMAL_SPAN][INPUT_KEY]
+    assert REDACTED in by_name[NORMAL_SPAN][OUTPUT_KEY]
+    for key in (INPUT_KEY, OUTPUT_KEY):
+        assert key not in by_name[SENSITIVE_SPAN]
+    assert not any(spike.MARKER_PREFIX.encode() in body for body in bodies)
+
+
+def test_run_demo_passes_with_masking_and_fails_without() -> None:
+    assert spike.run_demo(mask=True) == []
+    leaked = spike.run_demo(mask=False)
+    assert any("raw exported payload" in problem for problem in leaked)
+    assert any(NORMAL_SPAN in problem for problem in leaked)
+
+
+def test_main_demo_exit_codes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for key in ENV:
+        monkeypatch.delenv(key, raising=False)
+    assert main(["--demo"]) == 0
+    assert "PASS (demo: local OTLP capture)" in capsys.readouterr().out
+    assert main(["--demo", "--no-mask"]) == 1
+    assert "FAIL:" in capsys.readouterr().out
+
+    def broken(*, mask: bool) -> list[str]:
+        raise SpikeError("captured export is not a valid OTLP request")
+
+    monkeypatch.setattr(spike, "run_demo", broken)
+    assert main(["--demo"]) == 2
+    assert "not a valid OTLP" in capsys.readouterr().err
+
+
+# --- live: the real Langfuse Cloud run (K2 keys); skipped unless LIVE_API_TESTS=1 -----------
+# The conftest autouse fixture clears Settings keys per test, so snapshot them at import.
+
+_LIVE_ENV = {name: os.environ.get(name, "") for name in ENV}
+
+
+@pytest.mark.live
+def test_live_cloud_accepts_sdk_5_with_masking_and_capture_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, value in _LIVE_ENV.items():
+        monkeypatch.setenv(name, value)
+    assert main(["--live"]) == 0
