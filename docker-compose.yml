@@ -123,7 +123,7 @@ services:
     environment:
       # Vite dev-server proxy target for /v1 and /api (read by vite.config.ts inside the
       # container, so it names the compose service, not a host port).
-      VITE_DEV_PROXY_TARGET: http://api:8000
+      VITE_DEV_PROXY_TARGET: ${VITE_DEV_PROXY_TARGET:-http://api:8000}
     depends_on:
       api:
         condition: service_healthy
