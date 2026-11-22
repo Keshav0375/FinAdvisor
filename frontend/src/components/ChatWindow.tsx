@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { MessageBubble } from "@/components/MessageBubble";
 import { useChat } from "@/hooks/useChat";

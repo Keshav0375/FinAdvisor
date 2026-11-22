@@ -8,7 +8,7 @@ A full-stack AI advisory system that provides compliance-scoped financial produc
 
 ```mermaid
 graph TB
-    User[Browser] --> Frontend[Next.js :3000]
+    User[Browser] --> Frontend[Vite SPA :3000]
     Frontend --> Backend[FastAPI :8000]
     Backend --> Agent[Agent Orchestrator]
     Agent --> PGVector[(PostgreSQL + pgvector :5432)]
@@ -31,7 +31,7 @@ graph TB
 
 ```
 User (browser)
-  -> Next.js (:3000) -- renders UI, streams SSE
+  -> Vite React SPA (:3000 dev server) -- renders UI, streams SSE
     -> FastAPI (:8000) -- JWT verify, audit log, SSE endpoint
       -> Agent Orchestrator -- ReAct loop, tool calls
         -> pgvector (RLS-filtered similarity search)
@@ -49,7 +49,7 @@ User (browser)
 | Agent | Anthropic SDK (ReAct loop, 4 tools) |
 | LLM access | Anthropic API direct (Kong gateway returns in E2) |
 | Observability | Langfuse Cloud (trace per query, ADR-018) |
-| Frontend | Next.js 14, Tailwind CSS, zustand |
+| Frontend | Vite, React 19, TypeScript, Tailwind CSS, zustand |
 | IaC | Terraform (GCP Cloud Run, Cloud SQL) |
 | CI | GitHub Actions (lint + eval gate) |
 
@@ -100,7 +100,7 @@ poetry run finadvisor
 - Applies database migrations (`jobs migrate`, a no-op when already at the latest revision)
 - Ingests 50 synthetic documents with embeddings (if first run, costs ~$0.01 via Voyage AI)
 - Starts the FastAPI backend on `:8000`
-- Installs frontend deps and starts Next.js on `:3000`
+- Installs frontend deps and starts the Vite dev server on `:3000`
 - Connects directly to Anthropic API (no gateway needed)
 
 After first run, starting the app consumes **zero API tokens**. LLM tokens are only used when you ask questions in the chat.
@@ -206,7 +206,7 @@ tests/compose/check_compose.sh
 
 # Frontend lint + build
 cd frontend
-npm run lint && npm run build
+npm run lint && npm run typecheck && npm run test && npm run build
 
 # Stop everything
 # Ctrl+C in the finadvisor terminal, then:
@@ -228,7 +228,7 @@ finadvisor/
       retrieval/      Voyage embeddings, vector store
     scripts/          Ingest, corpus gen, eval runner
     tests/            120+ tests (unit, integration, e2e)
-  frontend/          Next.js 14 chat UI
+  frontend/          Vite + React 19 chat UI (SPA)
     src/
       components/     ChatWindow, CitationPanel, UserSwitcher
       hooks/          useChat (SSE), useUser (zustand)

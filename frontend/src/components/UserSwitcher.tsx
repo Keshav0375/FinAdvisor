@@ -1,5 +1,3 @@
-"use client";
-
 import { useUser } from "@/hooks/useUser";
 import { USERS } from "@/lib/users";
 
