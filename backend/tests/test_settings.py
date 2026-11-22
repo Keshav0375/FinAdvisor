@@ -156,6 +156,29 @@ class TestModels:
             assert settings_env[key] not in str(exc.value)
 
 
+class TestEcfrRateLimit:
+    def test_default_is_one_request_per_second_and_not_required(self) -> None:
+        assert "CONNECTOR_RATE_RPS_ECFR" not in REQUIRED_KEYS
+        assert build().ecfr_rate_limit_rps == 1.0
+
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CONNECTOR_RATE_RPS_ECFR", "0.5")
+        assert build().ecfr_rate_limit_rps == 0.5
+
+    @pytest.mark.parametrize("value", ["0", "-1", "abc"])
+    def test_bad_value_rejected_naming_the_variable(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("CONNECTOR_RATE_RPS_ECFR", value)
+        with pytest.raises(ValidationError) as exc:
+            build()
+        assert "CONNECTOR_RATE_RPS_ECFR" in str(exc.value)
+
+    def test_env_example_documents_the_default(self) -> None:
+        example = (BACKEND_DIR.parent / ".env.example").read_text(encoding="utf-8")
+        assert "CONNECTOR_RATE_RPS_ECFR=1.0" in example
+
+
 class TestAnthropicBaseUrl:
     @pytest.mark.parametrize(
         "url",
