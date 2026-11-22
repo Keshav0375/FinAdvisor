@@ -121,13 +121,14 @@ services:
     ports:
       - "127.0.0.1:${FRONTEND_HOST_PORT:-3000}:3000"
     environment:
-      # Read by the browser, so it names the host port, not the compose service.
-      NEXT_PUBLIC_API_URL: http://localhost:${API_HOST_PORT:-8000}
+      # Vite dev-server proxy target for /v1 and /api (read by vite.config.ts inside the
+      # container, so it names the compose service, not a host port).
+      VITE_DEV_PROXY_TARGET: ${VITE_DEV_PROXY_TARGET:-http://api:8000}
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      # node:20-slim has no curl; Node 20 has a global fetch. The dev server compiles on first hit.
+      # node:20-slim has no curl; Node 20 has a global fetch.
       test:
         - CMD
         - node
