@@ -4,8 +4,10 @@ Run by hand, never in the PR gate:
 
     cd backend && python -m scripts.spike_ecfr_api --out-dir tests/fixtures/ecfr
 
-Makes a handful of requests (7 by default), at most CONNECTOR_RATE_RPS_ECFR per second, with a
-descriptive User-Agent and no personal data. The findings are written up in docs/spikes/ecfr-api.md.
+It must run as a module from backend/ (not `python scripts/spike_ecfr_api.py`), so `src` imports.
+Makes 7 requests, at most CONNECTOR_RATE_RPS_ECFR per second (a higher --rps is refused unless
+--allow-above-limit is given), with a descriptive User-Agent and no personal data. The findings
+are written up in docs/spikes/ecfr-api.md.
 """
 
 from __future__ import annotations
@@ -14,16 +16,18 @@ import argparse
 import asyncio
 import hashlib
 import json
+import os
 import re
 import sys
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 import structlog
+from pydantic import TypeAdapter, ValidationError
 
 from src.config import Settings
 
@@ -31,11 +35,15 @@ log = structlog.get_logger()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_OUT_DIR = PROJECT_ROOT / "backend" / "tests" / "fixtures" / "ecfr"
+# BASE_URL, USER_AGENT and TIMEOUT_S are spike-local on purpose: this script is run by hand, once.
+# The connector (E11-T15) moves the base URL and timeout into Settings as ECFR knobs, together
+# with the throttle, so the single typed config stays the only place for tunables.
 BASE_URL = "https://www.ecfr.gov/api/versioner/v1"
 USER_AGENT = "FinAdvisor-spike/0.1 (eCFR API probe; research prototype)"
 TITLE = 17
 PART = 275
 TIMEOUT_S = 30.0
+RPS_ENV = "CONNECTOR_RATE_RPS_ECFR"
 # `None` means the Accept-Encoding header is not set at all on the request.
 ENCODING_VARIANTS: tuple[tuple[str, str | None], ...] = (
     ("gzip", "gzip"),
@@ -84,10 +92,34 @@ class Throttle:
         self._last = now
 
 
-def default_rps() -> float:
-    """The knob's default from Settings, read without building Settings (no secrets needed)."""
-    default = Settings.model_fields["ecfr_rate_limit_rps"].default
-    return float(default)
+def configured_rps(environ: Mapping[str, str] | None = None) -> float:
+    """Settings.ecfr_rate_limit_rps: CONNECTOR_RATE_RPS_ECFR if set, else the field default.
+
+    Validated with the Settings field's own constraints, without building Settings (which would
+    need every secret for a script that only probes a public API).
+    """
+    env = os.environ if environ is None else environ
+    field = Settings.model_fields["ecfr_rate_limit_rps"]
+    raw = env.get(RPS_ENV)
+    if raw is None:
+        return float(field.default)
+    adapter: TypeAdapter[float] = TypeAdapter(Annotated[float, *field.metadata])
+    try:
+        return float(adapter.validate_python(raw))
+    except ValidationError as exc:
+        raise ValueError(f"{RPS_ENV}={raw!r} is invalid: {exc.errors()[0]['msg']}") from exc
+
+
+def resolve_rps(requested: float | None, configured: float, allow_above_limit: bool) -> float:
+    """The rate to use: the configured one, or a lower request; higher only when forced."""
+    if requested is None:
+        return configured
+    if requested > configured and not allow_above_limit:
+        raise ValueError(
+            f"--rps {requested} is above the configured limit {configured} ({RPS_ENV}); "
+            "pass --allow-above-limit to override"
+        )
+    return requested
 
 
 def make_client() -> httpx.AsyncClient:
@@ -168,7 +200,7 @@ def write_sample(out_dir: Path, name: str, payload: dict[str, Any]) -> Path:
 
 
 async def run(client: httpx.AsyncClient, throttle: Throttle, out_dir: Path) -> dict[str, Any]:
-    probes: list[Probe] = []
+    report: dict[str, Any] = {"probes": []}
     samples: dict[str, dict[str, Any]] = {}
     for label, path, params in (
         ("titles", "titles.json", {}),
@@ -176,11 +208,10 @@ async def run(client: httpx.AsyncClient, throttle: Throttle, out_dir: Path) -> d
     ):
         for _, encoding in ENCODING_VARIANTS:
             probe, response = await fetch(client, throttle, label, path, params, encoding)
-            probes.append(probe)
+            report["probes"].append(probe.__dict__)
             if encoding == "gzip" and probe.status == 200:
                 samples[label] = response.json()
 
-    report: dict[str, Any] = {"probes": [p.__dict__ for p in probes]}
     if "titles" in samples:
         entry = title_entry(samples["titles"], TITLE)
         report["title"] = entry
@@ -195,7 +226,6 @@ async def run(client: httpx.AsyncClient, throttle: Throttle, out_dir: Path) -> d
             {"part": str(PART)},
             "gzip",
         )
-        probes.append(probe)
         report["probes"].append(probe.__dict__)
         report["full"] = {
             "date": as_of,
@@ -216,12 +246,21 @@ async def amain(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--rps",
         type=float,
-        default=default_rps(),
-        help="max requests per second (default: CONNECTOR_RATE_RPS_ECFR default)",
+        default=None,
+        help=f"requests per second (default and maximum: {RPS_ENV}, default 1.0)",
+    )
+    parser.add_argument(
+        "--allow-above-limit",
+        action="store_true",
+        help="allow --rps above the configured limit",
     )
     args = parser.parse_args(argv)
+    try:
+        rps = resolve_rps(args.rps, configured_rps(), args.allow_above_limit)
+    except ValueError as exc:
+        parser.error(str(exc))
     async with make_client() as client:
-        report = await run(client, Throttle(args.rps), args.out_dir)
+        report = await run(client, Throttle(rps), args.out_dir)
     sys.stdout.write(json.dumps(report, indent=2) + "\n")
     return 0
 

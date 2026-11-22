@@ -5,6 +5,18 @@ Read and probed on 2026-11-21 (the server clock showed Sun 22 Nov 2026 02:45 GMT
 (7 requests, 1 per second, User-Agent `FinAdvisor-spike/0.1 (eCFR API probe; research prototype)`,
 no personal data). The samples it recorded are in `backend/tests/fixtures/ecfr/`.
 
+Run it by hand, never in the PR gate, as a module from `backend/` (running the file directly fails
+because `src` is not importable):
+
+    cd backend && python -m scripts.spike_ecfr_api --out-dir tests/fixtures/ecfr
+
+The rate defaults to `CONNECTOR_RATE_RPS_ECFR` (`Settings.ecfr_rate_limit_rps`, default 1.0). A
+higher `--rps` is refused unless `--allow-above-limit` is also given.
+
+The base URL, User-Agent and timeout in the script are spike-local constants, not knobs. The real
+connector ticket (E11-T15) moves the base URL and timeout into Settings as ECFR knobs, together
+with the throttle.
+
 ## Summary
 
 | Question | Arch says | Live result |
