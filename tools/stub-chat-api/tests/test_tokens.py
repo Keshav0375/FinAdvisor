@@ -30,6 +30,7 @@ def test_build_unsigned_jwt_has_alg_none_and_empty_signature():
     assert claims["email"] == "a@b"
     assert claims["iat"] == 1000
     assert claims["exp"] == 1060
+    assert claims["stub"] is True
 
 
 def test_decode_round_trip_with_and_without_bearer_prefix():

@@ -35,7 +35,10 @@ def _b64url_decode(segment: str) -> bytes:
 
 
 def build_unsigned_jwt(audience: str, email: str, now: int, ttl_s: int) -> str:
-    """Return an `alg: none` JWT shaped like a GCE metadata identity token."""
+    """Return an `alg: none` JWT shaped like a GCE metadata identity token.
+
+    The `stub: true` claim marks it so it is never mistaken for a real Google token.
+    """
     header = {"alg": "none", "typ": "JWT"}
     claims = {
         "aud": audience,
@@ -43,6 +46,7 @@ def build_unsigned_jwt(audience: str, email: str, now: int, ttl_s: int) -> str:
         "email": email,
         "email_verified": True,
         "iss": ISSUER,
+        "stub": True,
         "iat": now,
         "exp": now + ttl_s,
     }

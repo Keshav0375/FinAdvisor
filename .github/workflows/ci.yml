@@ -145,3 +145,34 @@ jobs:
           ANTHROPIC_API_KEY: ci-unused-anthropic-key
           VOYAGE_API_KEY: ci-unused-voyage-key
           JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
+
+  stub-chat-api:
+    # Test tooling for the gateway epic (tools/stub-chat-api): lint, format, unit tests with a
+    # coverage floor, and the image acceptance script (build, run, curl, docker stop).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/stub-chat-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Unit tests
+        run: pytest --cov=app --cov=config --cov=serve --cov=tokens --cov-fail-under=80
+
+      - name: Image acceptance checks
+        run: bash tests/check_image.sh

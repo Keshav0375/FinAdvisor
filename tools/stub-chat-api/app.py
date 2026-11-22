@@ -15,10 +15,11 @@ from config import Settings
 from tokens import TokenError, build_unsigned_jwt, decode_unverified, digest_header
 
 # Header names whose value is a credential: echoed as {sha256, length} only.
-REDACTED_HEADERS = frozenset({"authorization", "x-serverless-authorization", "proxy-authorization"})
+REDACTED_HEADERS = frozenset(
+    {"authorization", "x-serverless-authorization", "proxy-authorization", "cookie", "x-api-key"}
+)
 SERVERLESS_AUTH_HEADER = "x-serverless-authorization"
 IDENTITY_PATH = "/metadata-mock/computeMetadata/v1/instance/service-accounts/default/identity"
-MAX_AUDIENCE_LENGTH = 2048
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
 
 
@@ -93,14 +94,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get(IDENTITY_PATH)
     async def identity(
-        audience: Annotated[str, Query(min_length=1, max_length=MAX_AUDIENCE_LENGTH)],
+        audience: Annotated[str, Query(min_length=1)],
     ) -> PlainTextResponse:
+        if len(audience) > cfg.max_audience_length:
+            raise HTTPException(422, f"audience must be <= {cfg.max_audience_length} characters")
         token = build_unsigned_jwt(
             audience, cfg.metadata_email, int(time.time()), cfg.metadata_token_ttl_s
         )
         return PlainTextResponse(token, headers={"Metadata-Flavor": "Google"})
 
     return app
-
-
-app = create_app()

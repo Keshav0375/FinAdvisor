@@ -1,3 +1,4 @@
+import base64
 import json
 
 import pytest
@@ -61,6 +62,16 @@ def test_echo_redacts_other_credential_headers(client):
     assert "SENTINEL_BBB" not in response.text
     assert "SENTINEL_CCC" not in response.text
     assert response.json()["headers"]["proxy-authorization"]["length"] == len("Basic SENTINEL_BBB")
+
+
+def test_echo_hashes_cookie_and_api_key(client):
+    cookie, api_key = "session=SENTINEL_DDD", "SENTINEL_EEE"
+    response = client.get("/echo", headers={"Cookie": cookie, "X-Api-Key": api_key})
+    assert "SENTINEL_DDD" not in response.text
+    assert "SENTINEL_EEE" not in response.text
+    headers = response.json()["headers"]
+    assert headers["cookie"] == digest_header(cookie)
+    assert headers["x-api-key"] == digest_header(api_key)
 
 
 def test_sse_sequence(client):
@@ -150,6 +161,19 @@ def test_echo_malformed_serverless_authorization_is_an_error_object_not_500(clie
 @pytest.mark.parametrize("params", [{}, {"audience": ""}, {"audience": "a" * 2049}])
 def test_metadata_mock_rejects_bad_audience(client, params):
     assert client.get(IDENTITY_PATH, params=params).status_code == 422
+
+
+def test_metadata_mock_audience_length_limit_is_a_setting():
+    short = TestClient(create_app(Settings(max_audience_length=8)))
+    assert short.get(IDENTITY_PATH, params={"audience": "a" * 8}).status_code == 200
+    assert short.get(IDENTITY_PATH, params={"audience": "a" * 9}).status_code == 422
+
+
+def test_metadata_mock_token_carries_stub_marker(client):
+    token = client.get(IDENTITY_PATH, params={"audience": "https://x"}).text
+    payload = token.split(".")[1]
+    claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    assert claims["stub"] is True
 
 
 def test_create_app_reads_settings_from_env_by_default(monkeypatch):

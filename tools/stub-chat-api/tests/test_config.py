@@ -27,6 +27,7 @@ def test_overrides_every_knob():
             "STUB_METADATA_EMAIL": "x@y",
             "STUB_METADATA_TOKEN_TTL_S": "10",
             "STUB_KEEPALIVE_TIMEOUT_S": "3",
+            "STUB_METADATA_MAX_AUDIENCE_LENGTH": "16",
         }
     )
     assert s == Settings(
@@ -39,6 +40,7 @@ def test_overrides_every_knob():
         metadata_email="x@y",
         metadata_token_ttl_s=10,
         keepalive_timeout_s=3,
+        max_audience_length=16,
     )
 
 
@@ -56,6 +58,7 @@ def test_empty_value_uses_default():
         ("STUB_SSE_MAX_DURATION_S", "0"),
         ("STUB_METADATA_TOKEN_TTL_S", "0"),
         ("STUB_KEEPALIVE_TIMEOUT_S", "x"),
+        ("STUB_METADATA_MAX_AUDIENCE_LENGTH", "0"),
     ],
 )
 def test_invalid_value_fails_fast_naming_the_variable(name, value):

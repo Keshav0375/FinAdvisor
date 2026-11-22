@@ -45,6 +45,7 @@ class Settings:
     metadata_email: str = "stub@fa-gateway.iam.gserviceaccount.com"
     metadata_token_ttl_s: int = 3600
     keepalive_timeout_s: int = 5
+    max_audience_length: int = 2048
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -67,5 +68,8 @@ class Settings:
             ),
             keepalive_timeout_s=_int(
                 source, "STUB_KEEPALIVE_TIMEOUT_S", defaults.keepalive_timeout_s, 1
+            ),
+            max_audience_length=_int(
+                source, "STUB_METADATA_MAX_AUDIENCE_LENGTH", defaults.max_audience_length, 1
             ),
         )
