@@ -21,6 +21,7 @@ from scripts.spike_langfuse_v5 import (
     OUTPUT_KEY,
     REDACTED,
     SENSITIVE_SPAN,
+    SpikeAuthError,
     SpikeError,
     evaluate_trace,
     fetch_trace,
@@ -154,9 +155,9 @@ def test_poll_trace_raises_auth_error_immediately() -> None:
     clock = _Clock()
 
     def fetch() -> dict[str, Any] | None:
-        raise SpikeError("Langfuse API rejected the key pair (HTTP 401)")
+        raise SpikeAuthError("Langfuse API rejected the key pair (HTTP 401)")
 
-    with pytest.raises(SpikeError, match="rejected"):
+    with pytest.raises(SpikeAuthError, match="rejected"):
         poll_trace(fetch, timeout=60, interval=3, sleep=clock.sleep, clock=clock)
     assert clock.now == 0
 
@@ -219,7 +220,7 @@ def test_fetch_trace_404_is_not_found_yet() -> None:
 def test_fetch_trace_auth_failure_raises_without_leaking_keys(code: int) -> None:
     with (
         patch.object(spike.urllib.request, "urlopen", side_effect=_http_error(code)),
-        pytest.raises(SpikeError, match="rejected the key pair") as exc,
+        pytest.raises(SpikeAuthError, match="rejected the key pair") as exc,
     ):
         fetch_trace("https://h.example", "pk-secret-1", "sk-secret-2", "t1", 5)
     assert "secret" not in str(exc.value)
@@ -262,19 +263,18 @@ def test_read_credentials_lists_missing_names_only() -> None:
 
 
 def test_parse_args_defaults_and_no_mask() -> None:
-    args = parse_args(["--live"])
-    assert args.live
+    args = parse_args([])
     assert not args.demo
     assert not args.no_mask
     assert args.poll_timeout == spike.DEFAULT_POLL_TIMEOUT_S
-    assert parse_args(["--live", "--no-mask"]).no_mask
+    assert parse_args(["--live"]).live
+    assert parse_args(["--no-mask"]).no_mask
 
 
-def test_parse_args_requires_exactly_one_mode() -> None:
+def test_parse_args_live_is_the_default_and_modes_exclude_each_other() -> None:
     assert parse_args(["--demo"]).demo
-    for argv in ([], ["--demo", "--live"]):
-        with pytest.raises(SystemExit):
-            parse_args(argv)
+    with pytest.raises(SystemExit):
+        parse_args(["--demo", "--live"])
 
 
 ENV = {"LANGFUSE_HOST": "https://h.example", "LANGFUSE_PUBLIC_KEY": "p", "LANGFUSE_SECRET_KEY": "s"}
@@ -287,7 +287,7 @@ def _run_main(
         monkeypatch.setenv(key, value)
     monkeypatch.setattr(spike, "run_spike", lambda *a, **k: "trace-1")
     monkeypatch.setattr(spike, "fetch_trace", lambda *a, **k: trace)
-    return main(["--live", *(argv or []), "--poll-timeout", "0"])
+    return main([*(argv or []), "--poll-timeout", "0"])
 
 
 def test_main_exit_0_and_prints_trace_id(
@@ -310,16 +310,19 @@ def test_main_exit_2_on_missing_env_and_auth_error(
 ) -> None:
     for key in ENV:
         monkeypatch.delenv(key, raising=False)
-    assert main(["--live"]) == 2
+    assert main([]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("ERROR: missing environment variables: LANGFUSE_HOST")
+    assert "--demo" in err
     for key, value in ENV.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setattr(spike, "run_spike", lambda *a, **k: "trace-1")
 
     def reject(*a: Any, **k: Any) -> None:
-        raise SpikeError("Langfuse API rejected the key pair (HTTP 401)")
+        raise SpikeAuthError("Langfuse API rejected the key pair (HTTP 401)")
 
     monkeypatch.setattr(spike, "fetch_trace", reject)
-    assert main(["--live", "--poll-timeout", "0"]) == 2
+    assert main(["--poll-timeout", "0"]) == 2
     assert "rejected" in capsys.readouterr().err
 
 
@@ -443,4 +446,4 @@ def test_live_cloud_accepts_sdk_5_with_masking_and_capture_off(
 ) -> None:
     for name, value in _LIVE_ENV.items():
         monkeypatch.setenv(name, value)
-    assert main(["--live"]) == 0
+    assert main([]) == 0

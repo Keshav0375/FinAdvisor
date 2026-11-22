@@ -14,8 +14,9 @@ Commands (from `backend/`):
   `poetry run python scripts/spike_langfuse_v5.py --demo` -> `PASS (demo: local OTLP capture)`, exit 0.
   With `--no-mask` it must fail: exit 1 and `SPIKE-SSN found ...` lines.
 - Real run, once `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` hold the Cloud values:
-  `poetry run python scripts/spike_langfuse_v5.py --live` -> exit 0 confirms the Cloud verdict. Also
-  run it with `--no-mask` (must exit 1) and once with a wrong secret (must exit 2).
+  `poetry run python scripts/spike_langfuse_v5.py` (live is the default; `--live` is the same) -> exit
+  0 confirms the Cloud verdict. Also run it with `--no-mask` (must exit 1) and once with a wrong secret
+  (must exit 2). Without the three variables it exits 2 with `ERROR: missing environment variables: ...`.
   Same check as a test: `LIVE_API_TESTS=1 poetry run pytest tests/test_spike_langfuse_v5.py -m live`.
 
 E0-T8 (the wrapper) may build on the demo verdict; the Cloud run confirms it.
@@ -58,7 +59,10 @@ hook is a client constructor argument, not a decorator argument.
   the real OTLP exporter send to `OtlpSink`, an in-process receiver on 127.0.0.1. The hook is wrapped
   to record that it ran. The SDK gets its own `TracerProvider`, because the SDK otherwise attaches
   every client's exporter to the process-wide provider and a second run in one process would also
-  export to the first run's closed receiver. Checks, all in `evaluate_capture`:
+  export to the first run's closed receiver. Between runs `reset_langfuse_clients()` clears the SDK's
+  per-key client singletons through the private `langfuse._client.resource_manager` module (spike
+  only; the production wrapper must not depend on private SDK modules). Checks, all in
+  `evaluate_capture`:
   - the masking function ran at least once before the spans arrived;
   - `spike-normal` input and output carry `[REDACTED]` and no `SPIKE-SSN` text;
   - `spike-sensitive` and `spike-root` carry no `langfuse.observation.input` or `.output` attribute;

@@ -6,18 +6,19 @@ Creates one trace with
   (b) a sensitive span created with `capture_input=False, capture_output=False`.
 It flushes, then polls GET {host}/api/public/traces/{id} (basic auth) and checks the result.
 
-Two modes, one of them required:
+Two modes:
+  (default) / --live  the real run against Langfuse Cloud. Reads LANGFUSE_PUBLIC_KEY,
+          LANGFUSE_SECRET_KEY, LANGFUSE_HOST from the environment (the typed Settings keys arrive
+          in E0-T3/E0-T8). Without them it exits 2 with the missing names.
   --demo  needs no account: the SDK exports to an in-process OTLP/HTTP receiver on 127.0.0.1 with
           the demo keys below, and the captured spans are checked (masking function ran before
           export, no sensitive value in any exported byte).
-  --live  the real run against Langfuse Cloud. Reads LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY,
-          LANGFUSE_HOST from the environment (the typed Settings keys arrive in E0-T3/E0-T8).
 
 Key values are never printed or logged.
 
 Exit codes: 0 pass, 1 check failed (leak or missing trace data), 2 auth, transport or config error.
 
-Usage: poetry run python scripts/spike_langfuse_v5.py (--demo | --live) [--no-mask]
+Usage: poetry run python scripts/spike_langfuse_v5.py [--demo | --live] [--no-mask]
 """
 
 from __future__ import annotations
@@ -68,6 +69,10 @@ EXIT_ERROR = 2
 
 class SpikeError(Exception):
     """Auth, transport or configuration failure (exit code 2)."""
+
+
+class SpikeAuthError(SpikeError):
+    """The Langfuse API rejected the key pair (never retried)."""
 
 
 def redact_marker(value: object) -> object:
@@ -153,7 +158,7 @@ def fetch_trace(
         if exc.code == 404:
             return None
         if exc.code in (401, 403):
-            raise SpikeError(f"Langfuse API rejected the key pair (HTTP {exc.code})") from exc
+            raise SpikeAuthError(f"Langfuse API rejected the key pair (HTTP {exc.code})") from exc
         raise SpikeError(f"Langfuse API error (HTTP {exc.code})") from exc
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise SpikeError(f"transport error: {type(exc).__name__}") from exc
@@ -181,9 +186,9 @@ def poll_trace(
         try:
             trace = fetch()
             last_transport = None
+        except SpikeAuthError:
+            raise
         except SpikeError as exc:
-            if "rejected the key pair" in str(exc):
-                raise
             last_transport = exc
             trace = None
         if trace is not None:
@@ -355,7 +360,11 @@ def evaluate_capture(bodies: list[bytes], mask_calls: list[int], *, mask: bool) 
 
 
 def reset_langfuse_clients() -> None:
-    """Drop the SDK's per-public-key client singletons so a later run builds a fresh client."""
+    """Drop the SDK's per-public-key client singletons so a later run builds a fresh client.
+
+    Uses the SDK's private `langfuse._client.resource_manager` (spike only: the production wrapper
+    must not depend on it).
+    """
     from langfuse._client.resource_manager import LangfuseResourceManager
 
     LangfuseResourceManager.reset()
@@ -389,9 +398,11 @@ def run_demo(*, mask: bool) -> list[str]:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
-    mode = parser.add_mutually_exclusive_group(required=True)
+    mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--demo", action="store_true", help="local OTLP capture, no account needed")
-    mode.add_argument("--live", action="store_true", help="real run against Langfuse Cloud")
+    mode.add_argument(
+        "--live", action="store_true", help="real run against Langfuse Cloud (the default)"
+    )
     parser.add_argument("--no-mask", action="store_true", help="skip mask_otel_spans (must fail)")
     parser.add_argument("--poll-timeout", type=float, default=DEFAULT_POLL_TIMEOUT_S)
     parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_S)
@@ -403,7 +414,10 @@ def read_credentials(env: Mapping[str, str]) -> tuple[str, str, str]:
     names = ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
     missing = [name for name in names if not env.get(name)]
     if missing:
-        raise SpikeError(f"missing environment variables: {', '.join(missing)}")
+        raise SpikeError(
+            f"missing environment variables: {', '.join(missing)} "
+            "(set them for the live run, or pass --demo to run without an account)"
+        )
     return env["LANGFUSE_HOST"], env["LANGFUSE_PUBLIC_KEY"], env["LANGFUSE_SECRET_KEY"]
 
 
