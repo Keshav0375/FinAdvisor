@@ -1,0 +1,16 @@
+# Patterns match at any depth (**/), not only at the build-context root.
+**/.venv
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.git
+**/tests
+**/requirements-dev.txt
+**/README.md
+**/.gitignore
