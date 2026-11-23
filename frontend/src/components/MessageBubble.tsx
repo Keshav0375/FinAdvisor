@@ -1,5 +1,3 @@
-"use client";
-
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { SourcesPanel } from "@/components/SourcesPanel";
 import { ToolCallCard } from "@/components/ToolCallCard";

@@ -26,6 +26,11 @@ is `CONNECTOR_RATE_RPS_EURLEX`, the pattern of arch deep-dive/06 section 6.7 (`C
 the eCFR sibling (`CONNECTOR_RATE_RPS_ECFR`). `EURLEX_RATE_LIMIT_RPS` is not read. Default 1.0, `> 0`, listed in
 `.env.example`; test `test_eurlex_rate_limit_config_present`.
 
+The script imports `Throttle` from the eCFR spike (`scripts/spike_ecfr_api.py`). `configured_rps` and
+`resolve_rps` stay local, because they read `CONNECTOR_RATE_RPS_EURLEX` and `Settings.eurlex_rate_limit_rps`
+(the eCFR copies name the ECFR variable); the connector tickets (E11-T15, E11-T18) can fold the three into one
+shared helper that takes the source name.
+
 The URLs, User-Agent, timeout, acts and languages in the script are spike-local constants, not knobs. The connector
 ticket (E11-T18) moves the URLs and timeout into Settings as EURLEX knobs, together with the throttle.
 

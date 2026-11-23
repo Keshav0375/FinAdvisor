@@ -1,5 +1,3 @@
-"use client";
-
 interface StreamingTextProps {
   content: string;
   isStreaming: boolean;

@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { CitationPanel } from "@/components/CitationPanel";
 import type { Citation } from "@/hooks/useChat";

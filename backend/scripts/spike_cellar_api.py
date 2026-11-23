@@ -22,7 +22,7 @@ import sys
 import time
 import zipfile
 from collections import Counter
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +33,7 @@ import httpx
 import structlog
 from pydantic import TypeAdapter, ValidationError
 
+from scripts.spike_ecfr_api import Throttle
 from src.config import Settings
 
 log = structlog.get_logger()
@@ -144,32 +145,6 @@ class Probe:
     body_bytes: int = 0
     rate_headers: dict[str, str] = field(default_factory=dict)
     error: str | None = None
-
-
-class Throttle:
-    """Blocks so that calls are at least 1/rps seconds apart. Clock and sleep are injectable."""
-
-    def __init__(
-        self,
-        rps: float,
-        clock: Callable[[], float] = time.monotonic,
-        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
-    ) -> None:
-        if rps <= 0:
-            raise ValueError("rps must be greater than 0")
-        self._interval = 1.0 / rps
-        self._clock = clock
-        self._sleep = sleep
-        self._last: float | None = None
-
-    async def wait(self) -> None:
-        now = self._clock()
-        if self._last is not None:
-            remaining = self._interval - (now - self._last)
-            if remaining > 0:
-                await self._sleep(remaining)
-                now = self._clock()
-        self._last = now
 
 
 def configured_rps(environ: Mapping[str, str] | None = None) -> float:

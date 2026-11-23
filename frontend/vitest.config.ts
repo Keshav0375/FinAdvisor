@@ -1,19 +1,19 @@
-import path from "node:path";
+import { defineConfig, mergeConfig } from "vitest/config";
 
-import { defineConfig } from "vitest/config";
+import viteConfig from "./vite.config";
 
-export default defineConfig({
-  resolve: {
-    alias: { "@": path.resolve(__dirname, "src") },
-  },
-  test: {
-    environment: "node",
-    include: ["src/**/*.test.ts"],
-    coverage: {
-      provider: "v8",
-      include: ["src/lib/**/*.ts"],
-      exclude: ["src/**/*.test.ts"],
-      reporter: [["text", { skipFull: false }]],
+export default mergeConfig(
+  viteConfig,
+  defineConfig({
+    test: {
+      environment: "jsdom",
+      include: ["src/**/*.test.{ts,tsx}"],
+      coverage: {
+        provider: "v8",
+        include: ["src/**/*.{ts,tsx}", "devServer.ts"],
+        exclude: ["src/**/*.test.{ts,tsx}", "src/**/*.d.ts"],
+        reporter: [["text", { skipFull: false }]],
+      },
     },
-  },
-});
+  }),
+);

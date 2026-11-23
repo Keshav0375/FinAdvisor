@@ -1,0 +1,68 @@
+
+== setup ==
+kong=kong:3.9.4 valkey=valkey/valkey:8.0 stub=fa-stub-chat-api:e2t1
+valkey: redis_version:7.2.4 valkey_version:8.0.13 
+
+== negative control 1: sync_rate 0 (the arch value) against Kong 3.9.4 ==
+        in 'config': sync_rate must be greater than 0.02, or -1 to disable
+PASS Kong rejects sync_rate: 0 at startup; synchronous Valkey writes need sync_rate: -1
+
+== (b) pre-function sandbox, default settings: require resty.sha256 ==
+status with the default sandbox: 500
+2026/11/22 03:36:28 [error] 1405#0: *6441 [kong] init.lua:406 [pre-function] /usr/local/share/lua/5.1/kong/tools/kong-lua-sandbox.lua:164: /usr/local/share/lua/5.1/kong/tools/sandbox.lua:79: require 'resty.sha256' not allowed within sandbox
+PASS default sandbox refuses require 'resty.sha256' (request fails with 500)
+
+== (b) pre-function sandbox: KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES=resty.sha256,resty.string ==
+PASS with the two requires allowed the pre-function runs (status 200, not 500)
+
+== (a) plugin order ==
+pre-function/handler.lua:1:return require("kong.plugins.pre-function._handler")(1000000)
+rate-limiting/handler.lua:57:RateLimitingHandler.PRIORITY = 910
+18:  "rate-limiting",
+34:  "pre-function",
+Access phase runs plugins by descending PRIORITY, a constant in each plugin's handler.lua.
+
+== AC1: 3/min per Authorization ==
+same token, 4 requests: 200 200 200 429
+4th response header: Retry-After: 30
+PASS 4th same-Authorization request is 429, first three are 200
+PASS 429 carries Retry-After
+PASS different Authorization returns 200 (got 200)
+
+== AC2: Valkey holds no raw bearer, keys hold the sha256 ==
+KEY ratelimit:00000000-0000-0000-0000-000000000000:5a58121e-0ac3-5d36-9201-43e17d6ddc1c:ea96de3baa4ff283d2c4b1ce165c9dce5a404b67cb1eddeb1e786b09c9b4ef04:1795318560000:minute
+  TYPE string
+  GET 2
+  TTL 60
+KEY ratelimit:00000000-0000-0000-0000-000000000000:5a58121e-0ac3-5d36-9201-43e17d6ddc1c:5f922173d094fa8e633dae2b27c6c12fc2e3ea794bf7a5bc70f61eed478c3b79:1795318560000:minute
+  TYPE string
+  GET 2
+  TTL 60
+keys: 2
+token demo-token-alpha: grep -c raw 'Bearer ...'=0, raw secret=0, sha256 5f922173d094fa8e633dae2b27c6c12fc2e3ea794bf7a5bc70f61eed478c3b79 in dump=1
+PASS raw bearer for demo-token-alpha occurs 0 times in the Valkey dump
+PASS a Valkey key contains the 64-hex sha256 of demo-token-alpha
+token demo-token-bravo: grep -c raw 'Bearer ...'=0, raw secret=0, sha256 ea96de3baa4ff283d2c4b1ce165c9dce5a404b67cb1eddeb1e786b09c9b4ef04 in dump=1
+PASS raw bearer for demo-token-bravo occurs 0 times in the Valkey dump
+PASS a Valkey key contains the 64-hex sha256 of demo-token-bravo
+
+== AC3: client-sent X-RL-Key is overwritten ==
+round 1: 200 200 200 200
+round 2: 200 200 200 200
+round 3: 200 200 200 200
+round 4: 429 429 429 429
+PASS four tokens sending X-RL-Key: fixed keep their own bucket (200 x3, then 429 each)
+PASS the upstream sees X-RL-Key = sha256 of the token, never 'fixed'
+keys: 4 (expected 4)
+PASS Valkey has 4 keys and none was built from the client value
+
+== AC4: no Authorization header (measured) ==
+no Authorization plus client X-RL-Key: forged -> status 200, upstream x-rl-key: '<absent>'
+PASS a forged X-RL-Key without Authorization is removed before the upstream
+no Authorization, 5 requests: 200 200 200 429 429
+KEY ratelimit:00000000-0000-0000-0000-000000000000:5a58121e-0ac3-5d36-9201-43e17d6ddc1c:192.168.215.1:1795318560000:minute
+keys: 1
+PASS no-Authorization behaviour measured (statuses and key recorded above)
+
+== summary ==
+PASS=15 FAIL=0
