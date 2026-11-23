@@ -202,6 +202,36 @@ class TestEurlexRateLimit:
         assert "CONNECTOR_RATE_RPS_EURLEX" in str(exc.value)
 
 
+class TestFcaApiRateLimit:
+    def test_default_is_one_request_per_second_and_not_required(self) -> None:
+        assert "FCA_API_RATE_LIMIT_RPS" not in REQUIRED_KEYS
+        assert build().fca_api_rate_limit_rps == 1.0
+
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("FCA_API_RATE_LIMIT_RPS", "0.5")
+        assert build().fca_api_rate_limit_rps == 0.5
+
+    @pytest.mark.parametrize("value", ["0", "-1", "abc"])
+    def test_bad_value_rejected_naming_the_variable(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("FCA_API_RATE_LIMIT_RPS", value)
+        with pytest.raises(ValidationError) as exc:
+            build()
+        assert "FCA_API_RATE_LIMIT_RPS" in str(exc.value)
+
+    def test_app_boot_does_not_depend_on_other_fca_settings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The spike's mode and key are not global config (E11-T20 owns them): even a bad value
+        # for them must not stop the app from booting.
+        monkeypatch.setenv("FCA_API_MODE", "live")
+        monkeypatch.setenv("FCA_API_KEY", "demo-fca-key")
+        build()
+        fca_fields = [name for name in Settings.model_fields if name.startswith("fca_api_")]
+        assert fca_fields == ["fca_api_rate_limit_rps"]
+
+
 class TestAnthropicBaseUrl:
     @pytest.mark.parametrize(
         "url",

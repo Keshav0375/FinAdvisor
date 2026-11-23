@@ -13,7 +13,7 @@ from src.agent.tools.lookup_suitability import (
     lookup_suitability_rule,
 )
 
-from .conftest import ALEX_KIM, PRIYA_SHARMA, SARAH_CHEN, requires_db
+from .conftest import ALEX_KIM, PRIYA_SHARMA, SARAH_CHEN
 
 SEED_RULES: list[dict[str, Any]] = [
     {
@@ -80,7 +80,7 @@ async def rules_session(db_session: AsyncSession) -> AsyncSession:
     await db_session.commit()
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_us_user_finds_matching_rule(rules_session: AsyncSession) -> None:
     input_data = SuitabilityInput(
@@ -95,7 +95,7 @@ async def test_us_user_finds_matching_rule(rules_session: AsyncSession) -> None:
     assert result.rules[0].jurisdiction == "US"
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_eu_user_sees_only_eu_rules(rules_session: AsyncSession) -> None:
     input_data = SuitabilityInput(
@@ -108,7 +108,7 @@ async def test_eu_user_sees_only_eu_rules(rules_session: AsyncSession) -> None:
     assert result.rules[0].regulatory_ref == "MiFID II Article 25"
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_multi_jurisdiction_user_sees_both(rules_session: AsyncSession) -> None:
     input_data = SuitabilityInput(
@@ -121,7 +121,7 @@ async def test_multi_jurisdiction_user_sees_both(rules_session: AsyncSession) ->
     assert jurisdictions == {"US", "EU"}
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_tier_filter_excludes_high_tier_rules(rules_session: AsyncSession) -> None:
     input_data = SuitabilityInput(product_category="alternatives", client_risk_profile="moderate")
@@ -133,7 +133,7 @@ async def test_tier_filter_excludes_high_tier_rules(rules_session: AsyncSession)
     assert result_high_tier.rules[0].rule_name == "US Alternatives Moderate Tier3"
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_no_matching_rules(rules_session: AsyncSession) -> None:
     input_data = SuitabilityInput(product_category="structured", client_risk_profile="conservative")

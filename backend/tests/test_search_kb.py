@@ -13,7 +13,7 @@ from src.agent.tools.search_kb import (
 from src.db.rls import set_rls_context
 from src.retrieval.vector_store import VectorStore
 
-from .conftest import SARAH_CHEN, requires_db
+from .conftest import SARAH_CHEN
 
 
 @pytest.mark.asyncio
@@ -73,11 +73,11 @@ async def test_search_kb_empty_results() -> None:
     assert result.results == []
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_search_kb_integration_with_rls(live_session: AsyncSession) -> None:
-    await set_rls_context(live_session, SARAH_CHEN)
-    vector_store = VectorStore(live_session)
+async def test_search_kb_integration_with_rls(corpus_session: AsyncSession) -> None:
+    await set_rls_context(corpus_session, SARAH_CHEN)
+    vector_store = VectorStore(corpus_session)
 
     query_vec = [0.01] * 1024
     with patch("src.agent.tools.search_kb.VoyageEmbeddings", autospec=True) as mock_emb_cls:
@@ -95,11 +95,11 @@ async def test_search_kb_integration_with_rls(live_session: AsyncSession) -> Non
         assert chunk.similarity_score > 0
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_vector_store_respects_rls(live_session: AsyncSession) -> None:
-    await set_rls_context(live_session, SARAH_CHEN)
-    vector_store = VectorStore(live_session)
+async def test_vector_store_respects_rls(corpus_session: AsyncSession) -> None:
+    await set_rls_context(corpus_session, SARAH_CHEN)
+    vector_store = VectorStore(corpus_session)
 
     results = await vector_store.similarity_search(query_embedding=[0.01] * 1024, top_k=100)
 

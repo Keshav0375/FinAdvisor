@@ -1,12 +1,11 @@
 """Integration tests for the Alembic baseline against a real Postgres.
 
-Run against pgvector/pgvector:0.8.5-pg16 (what Cloud SQL and CI pin), for example:
-    docker run -d --name fa-migrate-test -e POSTGRES_PASSWORD=postgres \
-        -p 5433:5432 pgvector/pgvector:0.8.5-pg16
-    export TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/postgres
-    pytest tests/test_migrations.py
+Run against pgvector/pgvector:0.8.5-pg16 (what Cloud SQL and CI pin): `make test-integration`, or
+point DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD at a running server and run
+`pytest -m integration tests/test_migrations.py`.
 Each test builds its own throwaway databases on that server and drops them afterwards.
-Skipped when TEST_DATABASE_URL is unset or unreachable, or when psql/pg_dump are missing.
+Skipped when the database is unreachable or psql/pg_dump are missing; with REQUIRE_SERVICES=1
+either one fails the test.
 """
 
 from __future__ import annotations
@@ -24,27 +23,29 @@ from typing import Any
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.engine import URL, make_url
+from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.config import Settings
-from tests.conftest import TEST_DATABASE_URL, TEST_ENV, requires_db
+from tests.conftest import TEST_DATABASE_URL, TEST_ENV, require_service
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 SCHEMA_SQL = BACKEND_DIR / "db" / "schema.sql"
 CLI_TIMEOUT_S = 120
 
-pytestmark = [
-    requires_db,
-    pytest.mark.skipif(
-        shutil.which("psql") is None or shutil.which("pg_dump") is None,
-        reason="psql and pg_dump are required for the schema equality tests",
-    ),
-]
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("postgres_available", "pg_tools")]
+
+
+@pytest.fixture
+def pg_tools() -> None:
+    missing = [tool for tool in ("psql", "pg_dump") if shutil.which(tool) is None]
+    detail = f"{', '.join(missing)} needed for the schema equality tests"
+    require_service("psql and pg_dump", not missing, detail)
 
 
 def _admin_url() -> URL:
-    return make_url(TEST_DATABASE_URL)
+    assert TEST_DATABASE_URL is not None
+    return TEST_DATABASE_URL
 
 
 def _run_async(coro: Any) -> Any:

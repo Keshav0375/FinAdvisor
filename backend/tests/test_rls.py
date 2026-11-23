@@ -11,11 +11,10 @@ from .conftest import (
     PRIYA_SHARMA,
     SARAH_CHEN,
     SEED_CONTENT_PREFIX,
-    requires_db,
 )
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_tier3_user_sees_tier_1_2_3_not_4(seeded_session: AsyncSession) -> None:
     await set_rls_context(seeded_session, SARAH_CHEN)
@@ -34,7 +33,7 @@ async def test_tier3_user_sees_tier_1_2_3_not_4(seeded_session: AsyncSession) ->
     assert len(rows) == 3
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_eu_only_user_sees_eu_chunks_not_us(seeded_session: AsyncSession) -> None:
     await set_rls_context(seeded_session, ALEX_KIM)
@@ -48,7 +47,7 @@ async def test_eu_only_user_sees_eu_chunks_not_us(seeded_session: AsyncSession) 
     assert rows[0].tier_required == 1
 
 
-@requires_db
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_combined_tier_and_jurisdiction_filter(seeded_session: AsyncSession) -> None:
     await set_rls_context(seeded_session, PRIYA_SHARMA)

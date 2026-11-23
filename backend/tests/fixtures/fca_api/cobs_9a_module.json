@@ -1,0 +1,24 @@
+{
+ "_demo": "demo fixture, from docs: shape assumed from the public FCA description (structured, machine-readable, current and future versions); not observed. Placeholder text, not FCA text. Confirm with the real account (K7).",
+ "reference": "COBS 9A",
+ "title": "Suitability (demo title)",
+ "version_date": "2026-11-21",
+ "last_modified": "2026-10-01",
+ "provisions": [
+  {
+   "reference": "COBS 9A.1.1",
+   "type": "R",
+   "text": "[demo placeholder text for provision 1, not FCA text]"
+  },
+  {
+   "reference": "COBS 9A.2.1",
+   "type": "R",
+   "text": "[demo placeholder text for provision 2, not FCA text]"
+  },
+  {
+   "reference": "COBS 9A.2.2",
+   "type": "G",
+   "text": "[demo placeholder text for provision 3, not FCA text]"
+  }
+ ]
+}
