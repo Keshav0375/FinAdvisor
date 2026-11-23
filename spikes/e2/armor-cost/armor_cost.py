@@ -22,7 +22,7 @@ import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +72,8 @@ class Sku:
     usage_unit: str
     unit_price: Decimal
     currency: str
+    # Distinct unit prices across the SKU's pricing tiers. Only a flat price (1) can be costed.
+    price_points: int = 1
 
 
 @dataclass(frozen=True)
@@ -135,12 +137,17 @@ def classify(description: str) -> str:
 
 def money(value: Any) -> Decimal:
     """Billing Catalog Money (units as a string, nanos as an int) to Decimal."""
-    return (
+    amount = (
         Decimal(str(value.get("units", "0") or "0")) + Decimal(int(value.get("nanos", 0))) / NANOS
     )
+    if not amount.is_finite():
+        raise ValueError("price is not a finite number")
+    return amount
 
 
-def parse_sku(raw: dict[str, Any]) -> Sku:
+def parse_sku(raw: Any) -> Sku:
+    if not isinstance(raw, dict) or "skuId" not in raw:
+        raise SkuError("a catalog SKU has no skuId")
     sku_id = str(raw["skuId"])
     try:
         expression = raw["pricingInfo"][0]["pricingExpression"]
@@ -149,18 +156,33 @@ def parse_sku(raw: dict[str, Any]) -> Sku:
         price = money(first["unitPrice"])
         currency = str(first["unitPrice"]["currencyCode"])
         unit = str(expression["usageUnit"])
-    except (KeyError, IndexError, ValueError, TypeError) as exc:
+        price_points = len({money(tier["unitPrice"]) for tier in tiers})
+    except (KeyError, IndexError, ValueError, TypeError, AttributeError, InvalidOperation) as exc:
         raise SkuError(f"SKU {sku_id} has no readable pricing") from exc
+    if price_points > 1:
+        log.warning("tiered_sku_price", sku_id=sku_id, price_points=price_points)
     description = str(raw.get("description", ""))
-    return Sku(sku_id, description, classify(description), unit, price, currency)
+    return Sku(sku_id, description, classify(description), unit, price, currency, price_points)
 
 
-def pick_service(services: Sequence[dict[str, Any]], service_filter: str) -> str:
+def pick_service(services: Sequence[Any], service_filter: str) -> str:
+    """Id of the one service named by the filter. An exact (case-insensitive) display name wins
+    when it is unique; any other ambiguity is an error, never a silent first pick."""
     wanted = service_filter.strip().lower()
-    matches = [s for s in services if wanted and wanted in str(s.get("displayName", "")).lower()]
+    named = [s for s in services if isinstance(s, dict) and s.get("displayName")]
+    matches = [s for s in named if wanted and wanted in str(s["displayName"]).lower()]
+    exact = [s for s in matches if str(s["displayName"]).strip().lower() == wanted]
+    if len(exact) == 1:
+        matches = exact
     if not matches:
         raise SkuError(f"no billing service matches {service_filter!r}")
-    return str(matches[0]["serviceId"])
+    if len(matches) > 1:
+        listed = ", ".join(f"{s['displayName']} ({s.get('serviceId', '?')})" for s in matches)
+        raise SkuError(f"{len(matches)} billing services match {service_filter!r}: {listed}")
+    service_id = matches[0].get("serviceId")
+    if not service_id:
+        raise SkuError(f"billing service {matches[0]['displayName']!r} has no serviceId")
+    return str(service_id)
 
 
 def build_prices(skus: Sequence[Sku]) -> Prices:
@@ -183,6 +205,12 @@ def build_prices(skus: Sequence[Sku]) -> Prices:
         if picked is not None and picked.usage_unit != want:
             raise SkuError(
                 f"SKU {picked.sku_id} ({kind}) has usage unit {picked.usage_unit!r}, not {want!r}"
+            )
+    for kind, picked in chosen.items():
+        if kind in (*REQUIRED_KINDS, KIND_MANAGED) and picked.price_points > 1:
+            raise SkuError(
+                f"SKU {picked.sku_id} ({kind}) has {picked.price_points} different tier prices;"
+                " a flat unit price cannot be assumed"
             )
     currencies = {chosen[kind].currency for kind in REQUIRED_KINDS}
     if len(currencies) != 1:
@@ -214,10 +242,15 @@ def monthly_cost(
 
 def max_rules_in_budget(prices: Prices, budget: Decimal, hours: int = HOURS_PER_MONTH) -> int:
     """Most billed rules that keep the 0-request cost at or under the budget."""
+    per_rule = prices.rule_hourly * hours
+    if per_rule <= 0:
+        raise SkuError(
+            "the rule fee is zero, so the number of rules inside the budget is unbounded"
+        )
     room = budget - prices.policy_hourly * hours
     if room < 0:
         return 0
-    return int(room // (prices.rule_hourly * hours))
+    return int(room // per_rule)
 
 
 def verdict(idle_total: Decimal, budget: Decimal) -> str:
@@ -243,7 +276,7 @@ def load_fixture(path: Path, service_filter: str) -> list[dict[str, Any]]:
         data = json.loads(path.read_text(encoding="utf-8"))
         services = data["services_response"]["services"]
         skus: list[dict[str, Any]] = data["skus_response"]["skus"]
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, TypeError) as exc:
         raise SkuError(f"cannot read fixture {path}") from exc
     pick_service(services, service_filter)
     return skus
@@ -263,7 +296,10 @@ def fetch_pages(client: httpx.Client, url: str, field: str) -> list[dict[str, An
         except (httpx.HTTPError, ValueError) as exc:
             # The key travels in a header, so the URL in this error never carries it.
             raise SkuError(f"billing catalog request failed: {type(exc).__name__}") from exc
-        items.extend(body.get(field, []))
+        page = body.get(field, []) if isinstance(body, dict) else None
+        if not isinstance(page, list):
+            raise SkuError(f"billing catalog response has no usable {field!r} list")
+        items.extend(page)
         token = str(body.get("nextPageToken", ""))
         if not token:
             return items
@@ -303,11 +339,10 @@ def render(
         f"requests/month | policy | rules | request fee | total ({prices.currency}) "
         "| total if managed-rule fee applies",
     ]
-    idle_total = Decimal(0)
+    # The verdict is about the idle (0-request) cost whatever tiers are printed.
+    idle_total = monthly_cost(prices, rules, 0, hours).total
     for requests in tiers:
         cost = monthly_cost(prices, rules, requests, hours)
-        if requests == 0:
-            idle_total = cost.total
         worst = cost.total_worst_case
         lines.append(
             f"{requests:,} | {cents(cost.policy)} | {cents(cost.rules)} | {cents(cost.request_fee)}"
@@ -323,13 +358,33 @@ def render(
     return "\n".join(lines) + "\n", outcome
 
 
+def decimal_arg(text: str) -> Decimal:
+    """argparse type for money knobs: a finite number, else a usage error (exit 2)."""
+    try:
+        value = Decimal(text)
+    except InvalidOperation as exc:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from exc
+    if not value.is_finite():
+        raise argparse.ArgumentTypeError(f"not a finite number: {text!r}")
+    return value
+
+
+def check_knobs(args: argparse.Namespace) -> None:
+    if args.hours <= 0:
+        raise SkuError("--hours must be greater than 0")
+    if min(args.waf_rules, args.geo_rules, args.throttle_rules) < 0:
+        raise SkuError("rule counts must not be negative")
+    if args.budget < 0:
+        raise SkuError("--budget must not be negative")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Cloud Armor SKU prices and monthly cost.")
     parser.add_argument("--service-filter", default=DEFAULT_SERVICE_FILTER)
     parser.add_argument("--fixture", type=Path, help="offline: read a recorded catalog response")
     parser.add_argument("--key-env", default=KEY_ENV, help="env var that holds the API key")
     parser.add_argument("--request-tiers", default=",".join(str(t) for t in REQUEST_TIERS))
-    parser.add_argument("--budget", type=Decimal, default=BUDGET_USD)
+    parser.add_argument("--budget", type=decimal_arg, default=BUDGET_USD)
     parser.add_argument("--hours", type=int, default=HOURS_PER_MONTH)
     parser.add_argument("--waf-rules", type=int, default=RuleSet.waf_rules)
     parser.add_argument("--geo-rules", type=int, default=RuleSet.geo_rules)
@@ -354,6 +409,7 @@ def collect(args: argparse.Namespace) -> tuple[list[dict[str, Any]], str]:
 
 
 def run(args: argparse.Namespace, raw_skus: Sequence[dict[str, Any]], source: str) -> int:
+    check_knobs(args)
     skus = [parse_sku(raw) for raw in raw_skus]
     if not skus:
         raise SkuError("the service has no SKUs")
@@ -372,9 +428,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         raw_skus, source = collect(args)
         return run(args, raw_skus, source)
-    except SkuError as exc:
-        log.error("armor_cost_failed", reason=str(exc))
-        sys.stderr.write(f"error: {exc}\n")
+    except (SkuError, ArithmeticError) as exc:
+        # ArithmeticError is the last resort for odd numbers (overflow); exit 1 must keep meaning
+        # "over budget", so nothing else may leak out of here.
+        reason = str(exc) or type(exc).__name__
+        log.error("armor_cost_failed", reason=reason)
+        sys.stderr.write(f"error: {reason}\n")
         return EXIT_NOT_FOUND
 
 

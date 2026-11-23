@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
@@ -317,6 +318,283 @@ def test_main_live_path_reads_key_from_env(
     assert armor.main([]) == 0
     assert "live Cloud Billing Catalog API" in capsys.readouterr().out
     assert seen[0].headers["X-Goog-Api-Key"] == "env-key"
+
+
+def write_variant(tmp_path: Path, mutate: Callable[[dict[str, Any]], None]) -> Path:
+    data = fixture_data()
+    mutate(data)
+    path = tmp_path / "variant.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def sku_by_id(data: dict[str, Any], sku_id: str) -> dict[str, Any]:
+    found: dict[str, Any] = next(s for s in data["skus_response"]["skus"] if s["skuId"] == sku_id)
+    return found
+
+
+def tiers_of(data: dict[str, Any], sku_id: str) -> list[dict[str, Any]]:
+    tiers: list[dict[str, Any]] = sku_by_id(data, sku_id)["pricingInfo"][0]["pricingExpression"][
+        "tieredRates"
+    ]
+    return tiers
+
+
+def run_fixture(path: Path, *extra: str) -> int:
+    code: int = armor.main(["--fixture", str(path), *extra])
+    return code
+
+
+# Finding 1: the verdict is about the idle cost, whatever tiers are printed.
+
+
+def test_verdict_is_based_on_idle_cost_without_a_zero_request_tier(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    args = ["--fixture", str(FIXTURE), "--request-tiers", "1000000,5000000", "--budget", "5"]
+
+    assert armor.main(args) == 0
+    out = capsys.readouterr().out
+    assert "VERDICT: FAIL (0-request total 9.00 vs budget 5.00 USD)" in out
+    assert "VERDICT: PASS" not in out
+    assert armor.main([*args, "--fail-on-over-budget"]) == armor.EXIT_OVER_BUDGET
+
+
+def test_verdict_passes_without_a_zero_tier_when_idle_is_inside_budget(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert armor.main(["--fixture", str(FIXTURE), "--request-tiers", "5000000"]) == 0
+
+    assert "VERDICT: PASS (0-request total 9.00 vs budget 10.00 USD)" in capsys.readouterr().out
+
+
+# Finding 2: a SKU with several tier prices cannot be costed from one unit price.
+
+
+def test_sku_with_a_free_first_tier_is_rejected(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def free_first_tier(data: dict[str, Any]) -> None:
+        tiers = tiers_of(data, "SYNTH-ARMOR-RULE-HR")
+        tiers[0]["unitPrice"] = {"currencyCode": "USD", "units": "0", "nanos": 0}
+        tiers.append(
+            {
+                "startUsageAmount": 10,
+                "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 1369863},
+            }
+        )
+
+    code = run_fixture(write_variant(tmp_path, free_first_tier))
+
+    assert code == armor.EXIT_NOT_FOUND
+    err = capsys.readouterr().err
+    assert "SYNTH-ARMOR-RULE-HR" in err
+    assert "2 different tier prices" in err
+
+
+def test_parse_sku_counts_distinct_price_points_only() -> None:
+    data = fixture_data()
+    sku = sku_by_id(data, "SYNTH-ARMOR-RULE-HR")
+    tiers = tiers_of(data, "SYNTH-ARMOR-RULE-HR")
+    tiers.append({**tiers[0], "startUsageAmount": 10})
+
+    assert armor.parse_sku(sku).price_points == 1
+
+    tiers.append({"startUsageAmount": 20, "unitPrice": {"currencyCode": "USD", "nanos": 5}})
+
+    assert armor.parse_sku(sku).price_points == 2
+
+
+def test_tiered_sku_that_is_not_used_only_warns(tmp_path: Path) -> None:
+    def tier_the_enterprise_sku(data: dict[str, Any]) -> None:
+        tiers = tiers_of(data, "SYNTH-ARMOR-ENTERPRISE-PAYGO")
+        tiers.append(
+            {
+                "startUsageAmount": 10,
+                "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 1},
+            }
+        )
+
+    assert run_fixture(write_variant(tmp_path, tier_the_enterprise_sku)) == 0
+
+
+def test_tiered_managed_sku_is_rejected(tmp_path: Path) -> None:
+    def tier_the_managed_sku(data: dict[str, Any]) -> None:
+        tiers_of(data, "SYNTH-ARMOR-MANAGED-REQ").append(
+            {
+                "startUsageAmount": 10,
+                "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 1},
+            }
+        )
+
+    assert run_fixture(write_variant(tmp_path, tier_the_managed_sku)) == armor.EXIT_NOT_FOUND
+
+
+# Finding 3: malformed input and bad numbers exit 2 with a message, never a traceback or exit 1.
+
+
+def test_service_without_service_id_exits_two(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def drop_service_id(data: dict[str, Any]) -> None:
+        del data["services_response"]["services"][1]["serviceId"]
+
+    assert run_fixture(write_variant(tmp_path, drop_service_id)) == armor.EXIT_NOT_FOUND
+    assert "has no serviceId" in capsys.readouterr().err
+
+
+def test_live_service_without_service_id_raises() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"services": [{"displayName": "Cloud Armor"}]})
+
+    with (
+        REAL_CLIENT(transport=httpx.MockTransport(handler)) as client,
+        pytest.raises(armor.SkuError, match="no serviceId"),
+    ):
+        armor.fetch_live(client, "Cloud Armor")
+
+
+@pytest.mark.parametrize(
+    "body",
+    [["not", "an", "object"], {"services": "oops"}, {"services": None}],
+)
+def test_live_response_with_the_wrong_shape_raises(body: Any) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=body)
+
+    with (
+        REAL_CLIENT(transport=httpx.MockTransport(handler)) as client,
+        pytest.raises(armor.SkuError, match="no usable 'services' list"),
+    ):
+        armor.fetch_live(client, "Cloud Armor")
+
+
+@pytest.mark.parametrize("bad_units", ["abc", "1e999999999999", "NaN"])
+def test_non_numeric_price_exits_two_not_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], bad_units: str
+) -> None:
+    def break_price(data: dict[str, Any]) -> None:
+        tiers_of(data, "SYNTH-ARMOR-POLICY-HR")[0]["unitPrice"]["units"] = bad_units
+
+    code = run_fixture(write_variant(tmp_path, break_price))
+
+    assert code == armor.EXIT_NOT_FOUND
+    assert "error:" in capsys.readouterr().err
+
+
+def test_non_integer_nanos_exits_two(tmp_path: Path) -> None:
+    def break_nanos(data: dict[str, Any]) -> None:
+        tiers_of(data, "SYNTH-ARMOR-POLICY-HR")[0]["unitPrice"]["nanos"] = "many"
+
+    assert run_fixture(write_variant(tmp_path, break_nanos)) == armor.EXIT_NOT_FOUND
+
+
+def test_sku_without_sku_id_or_not_an_object_exits_two(tmp_path: Path) -> None:
+    def drop_sku_id(data: dict[str, Any]) -> None:
+        del data["skus_response"]["skus"][0]["skuId"]
+
+    def add_junk_entry(data: dict[str, Any]) -> None:
+        data["skus_response"]["skus"].append("junk")
+
+    assert run_fixture(write_variant(tmp_path, drop_sku_id)) == armor.EXIT_NOT_FOUND
+    assert run_fixture(write_variant(tmp_path, add_junk_entry)) == armor.EXIT_NOT_FOUND
+
+
+def test_zero_rule_price_exits_two_not_zero_division(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def free_rules(data: dict[str, Any]) -> None:
+        tiers_of(data, "SYNTH-ARMOR-RULE-HR")[0]["unitPrice"]["nanos"] = 0
+
+    code = run_fixture(write_variant(tmp_path, free_rules))
+
+    assert code == armor.EXIT_NOT_FOUND
+    captured = capsys.readouterr()
+    assert "rule fee is zero" in captured.err
+    assert "VERDICT" not in captured.out
+
+
+def test_zero_hours_exits_two_not_zero_division(capsys: pytest.CaptureFixture[str]) -> None:
+    assert armor.main(["--fixture", str(FIXTURE), "--hours", "0"]) == armor.EXIT_NOT_FOUND
+    assert "--hours must be greater than 0" in capsys.readouterr().err
+    assert armor.main(["--fixture", str(FIXTURE), "--hours", "-3"]) == armor.EXIT_NOT_FOUND
+
+
+def test_max_rules_in_budget_rejects_a_zero_rule_fee() -> None:
+    prices = fixture_prices()
+    free = armor.Prices(
+        prices.policy_hourly,
+        Decimal(0),
+        prices.request_each,
+        prices.managed_request_each,
+        prices.currency,
+    )
+
+    with pytest.raises(armor.SkuError, match="rule fee is zero"):
+        armor.max_rules_in_budget(free, Decimal("10"))
+
+
+@pytest.mark.parametrize("budget", ["abc", "NaN", "Infinity"])
+def test_bad_budget_is_a_usage_error(budget: str, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as info:
+        armor.main(["--fixture", str(FIXTURE), "--budget", budget])
+
+    assert info.value.code == 2
+    assert "--budget" in capsys.readouterr().err
+
+
+def test_negative_budget_or_rule_counts_exit_two() -> None:
+    assert armor.main(["--fixture", str(FIXTURE), "--budget", "-1"]) == armor.EXIT_NOT_FOUND
+    assert armor.main(["--fixture", str(FIXTURE), "--geo-rules", "-1"]) == armor.EXIT_NOT_FOUND
+
+
+def test_arithmetic_error_is_exit_two_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(*args: Any, **kwargs: Any) -> int:
+        raise ZeroDivisionError
+
+    monkeypatch.setattr(armor, "run", boom)
+
+    assert armor.main(["--fixture", str(FIXTURE)]) == armor.EXIT_NOT_FOUND
+    assert "ZeroDivisionError" in capsys.readouterr().err
+
+
+# Finding 4: an ambiguous service match is an error that lists the candidates.
+
+
+def test_two_services_matching_the_filter_exit_two_and_are_listed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def two_matches(data: dict[str, Any]) -> None:
+        services = data["services_response"]["services"]
+        services[0] = {"serviceId": "SYNTHETIC-A", "displayName": "Cloud Armor Edge"}
+        services[1] = {"serviceId": "SYNTHETIC-B", "displayName": "Cloud Armor Core"}
+
+    code = run_fixture(write_variant(tmp_path, two_matches))
+
+    assert code == armor.EXIT_NOT_FOUND
+    err = capsys.readouterr().err
+    assert "2 billing services match" in err
+    assert "Cloud Armor Edge (SYNTHETIC-A)" in err
+    assert "Cloud Armor Core (SYNTHETIC-B)" in err
+
+
+def test_unique_exact_display_name_wins_over_longer_names() -> None:
+    services = [
+        {"serviceId": "S-ENT", "displayName": "Cloud Armor Enterprise"},
+        {"serviceId": "S-STD", "displayName": "cloud armor"},
+    ]
+
+    assert armor.pick_service(services, "Cloud Armor") == "S-STD"
+    with pytest.raises(armor.SkuError, match="2 billing services match"):
+        armor.pick_service(services, "armor")
+
+
+def test_pick_service_ignores_entries_without_a_display_name() -> None:
+    services: list[Any] = ["junk", {"serviceId": "X"}, {"serviceId": "S1", "displayName": "Armor"}]
+
+    assert armor.pick_service(services, "armor") == "S1"
 
 
 def test_readme_records_verdict_table_fallback_and_live_command() -> None:

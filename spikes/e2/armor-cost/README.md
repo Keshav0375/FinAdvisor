@@ -78,7 +78,13 @@ separate WAF rules would bill 8 rules.
 Sensitivity (script flags): 5 unmerged WAF rules gives 8 billed rules and $13.00 at 0 requests (FAIL); not
 billing the default rule gives $8.00; the most billed rules inside $10 is 5.
 
-The script prints: `VERDICT: PASS (0-request total 9.00 vs budget 10.00 USD)`.
+Open arch point for the arch batch: R31 says "no geo allow-list" while 04 4.2 and ADR-012 list "geo rules".
+The geo deny rule is kept here. The totals for both readings are $9.00 (geo rule kept, `--geo-rules 1`)
+and $8.00 (no geo rule, `--geo-rules 0`).
+
+The script prints: `VERDICT: PASS (0-request total 9.00 vs budget 10.00 USD)`. The verdict always uses the
+0-request cost, even when `--request-tiers` leaves 0 out. A SKU priced in several tiers, an ambiguous
+service match or a malformed catalog response stops the run with exit 2 and a message.
 
 ## Verdict
 
