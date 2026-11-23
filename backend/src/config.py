@@ -104,9 +104,13 @@ class Settings(BaseSettings):
     # Seconds /readyz serves its last result (also a failing one) before probing again.
     readiness_cache_ttl_s: float = _env("READINESS_CACHE_TTL_S", default=5.0, gt=0)
 
-    # Source connectors: max requests per second to the FCA Handbook API. No vendor limit is
-    # published (docs/spikes/fca-handbook-api.md), so this is a conservative figure. The mode, key
-    # and the other FCA knobs belong to the connector (E11-T20), not to app boot.
+    # Source connectors: max requests per second to the eCFR versioner API. No vendor limit is
+    # published (docs/spikes/ecfr-api.md), so this is the arch's own conservative figure.
+    ecfr_rate_limit_rps: float = _env("CONNECTOR_RATE_RPS_ECFR", default=1.0, gt=0)
+
+    # Max requests per second to the FCA Handbook API. No vendor limit is published
+    # (docs/spikes/fca-handbook-api.md), so this is a conservative figure. The mode, key and the
+    # other FCA knobs belong to the connector (E11-T20), not to app boot.
     fca_api_rate_limit_rps: float = _env("FCA_API_RATE_LIMIT_RPS", default=1.0, gt=0)
 
     # PII

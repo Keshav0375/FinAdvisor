@@ -1,0 +1,40 @@
+_format_version: "3.0"
+
+# E2-T1 spike config. Scratch only, never shipped: the production kong.yml is E2's own ticket.
+# Kong, Valkey and the stub share one network namespace (run.sh), so every upstream is 127.0.0.1.
+services:
+  - name: stub-chat-api
+    url: http://127.0.0.1:8080/echo
+    routes:
+      - name: chat
+        paths: [/chat]
+        strip_path: true
+    plugins:
+      # Priority 1000000 (pre-function) runs before 910 (rate-limiting) in the access phase.
+      - name: pre-function
+        config:
+          access:
+            - |
+              local sha256 = require "resty.sha256"
+              local str = require "resty.string"
+              local auth = kong.request.get_header("authorization")
+              if auth then
+                local h = sha256:new()
+                h:update(auth)
+                kong.service.request.set_header("X-RL-Key", str.to_hex(h:final()))
+              else
+                kong.service.request.clear_header("X-RL-Key")
+              end
+      - name: rate-limiting
+        config:
+          limit_by: header
+          header_name: X-RL-Key
+          minute: 3
+          policy: redis
+          sync_rate: -1
+          fault_tolerant: true
+          hide_client_headers: false
+          redis:
+            host: 127.0.0.1
+            port: 6379
+            timeout: 2000
