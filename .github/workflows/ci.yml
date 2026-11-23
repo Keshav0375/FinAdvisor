@@ -126,7 +126,10 @@ jobs:
         run: npm run lint
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
 
       - name: Build
         run: npm run build
@@ -160,3 +163,70 @@ jobs:
           ANTHROPIC_API_KEY: ci-unused-anthropic-key
           VOYAGE_API_KEY: ci-unused-voyage-key
           JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
+
+  stub-chat-api:
+    # Test tooling for the gateway epic (tools/stub-chat-api): lint, format, unit tests with a
+    # coverage floor, and the image acceptance script (build, run, curl, docker stop).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/stub-chat-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Unit tests
+        run: pytest --cov=app --cov=config --cov=serve --cov=tokens --cov-fail-under=80
+
+      - name: Image acceptance checks
+        run: bash tests/check_image.sh
+
+  terraform-edge:
+    # terraform/edge/ (ADR-024 network): format, validate and plan-level tests with a mocked
+    # provider (no credentials, no project), plus the no-NAT / no-connector policy check.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: terraform/edge
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init (no backend)
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate
+
+      - name: Test (mocked provider)
+        run: terraform test
+
+      - name: Policy check on terraform/ (no Cloud NAT, no VPC connector)
+        working-directory: .
+        run: scripts/check_no_nat.sh terraform
+
+      - name: Policy check negative fixtures
+        working-directory: .
+        run: tests/terraform/check_no_nat_test.sh

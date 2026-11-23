@@ -1,5 +1,3 @@
-"use client";
-
 import ReactMarkdown from "react-markdown";
 import { CitationInline } from "@/components/CitationInline";
 import type { Citation } from "@/hooks/useChat";

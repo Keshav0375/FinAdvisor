@@ -1,5 +1,3 @@
-"use client";
-
 import { UserSwitcher } from "@/components/UserSwitcher";
 
 export function Header() {

@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     # Seconds /readyz serves its last result (also a failing one) before probing again.
     readiness_cache_ttl_s: float = _env("READINESS_CACHE_TTL_S", default=5.0, gt=0)
 
+    # Source connectors: max requests per second to the eCFR versioner API. No vendor limit is
+    # published (docs/spikes/ecfr-api.md), so this is the arch's own conservative figure.
+    ecfr_rate_limit_rps: float = _env("CONNECTOR_RATE_RPS_ECFR", default=1.0, gt=0)
+
     # PII
     pii_mode: str = _env("PII_MODE", default="regex")
     gcp_project_id: str = _env("GCP_PROJECT_ID", default="")

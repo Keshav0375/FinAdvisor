@@ -1,5 +1,3 @@
-"use client";
-
 import { StaleBadge } from "@/components/StaleBadge";
 import type { Citation } from "@/hooks/useChat";
 
