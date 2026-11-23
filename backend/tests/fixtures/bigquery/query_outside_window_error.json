@@ -1,0 +1,16 @@
+{
+ "error": {
+  "code": 400,
+  "message": "Invalid snapshot time 1763373600000 for table fa-spike-demo:fa_spike_tt.marker, outside of time travel window.",
+  "errors": [
+   {
+    "message": "Invalid snapshot time 1763373600000 for table fa-spike-demo:fa_spike_tt.marker, outside of time travel window.",
+    "domain": "global",
+    "reason": "invalidQuery",
+    "location": "q",
+    "locationType": "parameter"
+   }
+  ],
+  "status": "INVALID_ARGUMENT"
+ }
+}

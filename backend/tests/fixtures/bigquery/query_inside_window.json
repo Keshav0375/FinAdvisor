@@ -1,0 +1,13 @@
+{
+ "kind": "bigquery#getQueryResultsResponse",
+ "jobComplete": true,
+ "schema": {
+  "fields": [
+   {"name": "n", "type": "INTEGER", "mode": "NULLABLE"}
+  ]
+ },
+ "totalRows": "1",
+ "rows": [
+  {"f": [{"v": "1"}]}
+ ]
+}

@@ -1,0 +1,9 @@
+{
+ "demo": true,
+ "note": "DEMO FIXTURE, not a measurement. Illustrative bodies in the documented shapes of jobs.getQueryResults and of a REST error (https://docs.cloud.google.com/bigquery/docs/reference/rest/v2/jobs/getQueryResults). The out-of-window error text is from memory and UNVERIFIED-pending-K1; the docs do not state it. Scenario: a marker row was deleted at 2026-11-20T10:00:05Z; the probe at 2026-11-20T10:00:00Z ran inside the window and the probe at 2026-11-17T10:00:00Z is older than 48 h.",
+ "table": "fa-spike-demo.fa_spike_tt.marker",
+ "region": "europe-west2",
+ "inherit_dataset": "fa_spike_tt_inherit",
+ "ts_inside": "2026-11-20T10:00:00Z",
+ "ts_old": "2026-11-17T10:00:00Z"
+}
