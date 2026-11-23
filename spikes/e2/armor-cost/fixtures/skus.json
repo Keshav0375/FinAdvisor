@@ -1,0 +1,223 @@
+{
+  "_note": "SYNTHETIC FIXTURE (demo mode, no GCP key). Shape follows the Cloud Billing Catalog API v1 (services.list and services.skus.list). Every service id and SKU id below is synthetic and is not a real Google id. Unit prices are the public list prices read from https://cloud.google.com/armor/pricing on 2026-11-22, not API-verified: policy $0.006849315/hour, rule $0.001369863/hour, global requests $0.75 per 1,000,000, regional requests $0.60 per 1,000,000, managed-rule request fee $0.75 per 1,000,000, Enterprise Paygo subscription $0.273972603/hour. Per the Billing Catalog docs unitPrice is per 1 usageUnit, so per-request prices are fractions of a cent (units 0, nanos 750 is $0.00000075 per request). Replace this file by a real run with the live command in README.md once K1 (API key) is provided.",
+  "services_response": {
+    "services": [
+      {
+        "name": "services/SYNTHETIC-SERVICE-DECOY",
+        "serviceId": "SYNTHETIC-SERVICE-DECOY",
+        "displayName": "Synthetic Other Service",
+        "businessEntityName": "businessEntities/GCP"
+      },
+      {
+        "name": "services/SYNTHETIC-SERVICE-ARMOR",
+        "serviceId": "SYNTHETIC-SERVICE-ARMOR",
+        "displayName": "Cloud Armor",
+        "businessEntityName": "businessEntities/GCP"
+      }
+    ],
+    "nextPageToken": ""
+  },
+  "skus_response": {
+    "skus": [
+      {
+        "name": "services/SYNTHETIC-SERVICE-ARMOR/skus/SYNTH-ARMOR-POLICY-HR",
+        "skuId": "SYNTH-ARMOR-POLICY-HR",
+        "description": "[synthetic] Cloud Armor Standard security policy, per hour",
+        "category": {
+          "serviceDisplayName": "Cloud Armor",
+          "resourceFamily": "Network",
+          "resourceGroup": "CloudArmor",
+          "usageType": "OnDemand"
+        },
+        "serviceRegions": ["global"],
+        "pricingInfo": [
+          {
+            "summary": "",
+            "pricingExpression": {
+              "usageUnit": "h",
+              "usageUnitDescription": "hour",
+              "baseUnit": "s",
+              "baseUnitDescription": "second",
+              "baseUnitConversionFactor": 3600,
+              "displayQuantity": 1,
+              "tieredRates": [
+                {
+                  "startUsageAmount": 0,
+                  "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 6849315}
+                }
+              ]
+            },
+            "currencyConversionRate": 1
+          }
+        ],
+        "geoTaxonomy": {"type": "GLOBAL"}
+      },
+      {
+        "name": "services/SYNTHETIC-SERVICE-ARMOR/skus/SYNTH-ARMOR-RULE-HR",
+        "skuId": "SYNTH-ARMOR-RULE-HR",
+        "description": "[synthetic] Cloud Armor Standard rule, per hour",
+        "category": {
+          "serviceDisplayName": "Cloud Armor",
+          "resourceFamily": "Network",
+          "resourceGroup": "CloudArmor",
+          "usageType": "OnDemand"
+        },
+        "serviceRegions": ["global"],
+        "pricingInfo": [
+          {
+            "summary": "",
+            "pricingExpression": {
+              "usageUnit": "h",
+              "usageUnitDescription": "hour",
+              "baseUnit": "s",
+              "baseUnitDescription": "second",
+              "baseUnitConversionFactor": 3600,
+              "displayQuantity": 1,
+              "tieredRates": [
+                {
+                  "startUsageAmount": 0,
+                  "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 1369863}
+                }
+              ]
+            },
+            "currencyConversionRate": 1
+          }
+        ],
+        "geoTaxonomy": {"type": "GLOBAL"}
+      },
+      {
+        "name": "services/SYNTHETIC-SERVICE-ARMOR/skus/SYNTH-ARMOR-REQ-GLOBAL",
+        "skuId": "SYNTH-ARMOR-REQ-GLOBAL",
+        "description": "[synthetic] Cloud Armor Standard requests, globally scoped security policies",
+        "category": {
+          "serviceDisplayName": "Cloud Armor",
+          "resourceFamily": "Network",
+          "resourceGroup": "CloudArmor",
+          "usageType": "OnDemand"
+        },
+        "serviceRegions": ["global"],
+        "pricingInfo": [
+          {
+            "summary": "",
+            "pricingExpression": {
+              "usageUnit": "count",
+              "usageUnitDescription": "count",
+              "baseUnit": "count",
+              "baseUnitDescription": "count",
+              "baseUnitConversionFactor": 1,
+              "displayQuantity": 1000000,
+              "tieredRates": [
+                {
+                  "startUsageAmount": 0,
+                  "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 750}
+                }
+              ]
+            },
+            "currencyConversionRate": 1
+          }
+        ],
+        "geoTaxonomy": {"type": "GLOBAL"}
+      },
+      {
+        "name": "services/SYNTHETIC-SERVICE-ARMOR/skus/SYNTH-ARMOR-REQ-REGIONAL",
+        "skuId": "SYNTH-ARMOR-REQ-REGIONAL",
+        "description": "[synthetic] Cloud Armor Standard requests, regionally scoped security policies",
+        "category": {
+          "serviceDisplayName": "Cloud Armor",
+          "resourceFamily": "Network",
+          "resourceGroup": "CloudArmor",
+          "usageType": "OnDemand"
+        },
+        "serviceRegions": ["us-central1"],
+        "pricingInfo": [
+          {
+            "summary": "",
+            "pricingExpression": {
+              "usageUnit": "count",
+              "usageUnitDescription": "count",
+              "baseUnit": "count",
+              "baseUnitDescription": "count",
+              "baseUnitConversionFactor": 1,
+              "displayQuantity": 1000000,
+              "tieredRates": [
+                {
+                  "startUsageAmount": 0,
+                  "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 600}
+                }
+              ]
+            },
+            "currencyConversionRate": 1
+          }
+        ],
+        "geoTaxonomy": {"type": "REGIONAL", "regions": ["us-central1"]}
+      },
+      {
+        "name": "services/SYNTHETIC-SERVICE-ARMOR/skus/SYNTH-ARMOR-MANAGED-REQ",
+        "skuId": "SYNTH-ARMOR-MANAGED-REQ",
+        "description": "[synthetic] Cloud Armor managed rules request fee",
+        "category": {
+          "serviceDisplayName": "Cloud Armor",
+          "resourceFamily": "Network",
+          "resourceGroup": "CloudArmor",
+          "usageType": "OnDemand"
+        },
+        "serviceRegions": ["global"],
+        "pricingInfo": [
+          {
+            "summary": "",
+            "pricingExpression": {
+              "usageUnit": "count",
+              "usageUnitDescription": "count",
+              "baseUnit": "count",
+              "baseUnitDescription": "count",
+              "baseUnitConversionFactor": 1,
+              "displayQuantity": 1000000,
+              "tieredRates": [
+                {
+                  "startUsageAmount": 0,
+                  "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 750}
+                }
+              ]
+            },
+            "currencyConversionRate": 1
+          }
+        ],
+        "geoTaxonomy": {"type": "GLOBAL"}
+      },
+      {
+        "name": "services/SYNTHETIC-SERVICE-ARMOR/skus/SYNTH-ARMOR-ENTERPRISE-PAYGO",
+        "skuId": "SYNTH-ARMOR-ENTERPRISE-PAYGO",
+        "description": "[synthetic] Cloud Armor Enterprise Paygo subscription, per hour",
+        "category": {
+          "serviceDisplayName": "Cloud Armor",
+          "resourceFamily": "Network",
+          "resourceGroup": "CloudArmorEnterprise",
+          "usageType": "OnDemand"
+        },
+        "serviceRegions": ["global"],
+        "pricingInfo": [
+          {
+            "summary": "",
+            "pricingExpression": {
+              "usageUnit": "h",
+              "usageUnitDescription": "hour",
+              "baseUnit": "s",
+              "baseUnitDescription": "second",
+              "baseUnitConversionFactor": 3600,
+              "displayQuantity": 1,
+              "tieredRates": [
+                {
+                  "startUsageAmount": 0,
+                  "unitPrice": {"currencyCode": "USD", "units": "0", "nanos": 273972603}
+                }
+              ]
+            },
+            "currencyConversionRate": 1
+          }
+        ],
+        "geoTaxonomy": {"type": "GLOBAL"}
+      }
+    ],
+    "nextPageToken": ""
+  }
+}
