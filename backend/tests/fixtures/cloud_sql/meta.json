@@ -1,0 +1,7 @@
+{
+ "demo": true,
+ "note": "DEMO FIXTURE, not a measurement. Illustrative values in the documented shape of backupRuns.list (https://docs.cloud.google.com/sql/docs/postgres/admin-api/rest/v1/backupRuns/list). The scenario is hypothesis H1 of docs/adr/cloud-sql-backup-expiry.md: the automated backup taken before the stop is still listed while stopped and right after start, and is pruned only once a new automated backup exists after start.",
+ "instance": "fa-spike-backup",
+ "retained_backups_count": 1,
+ "stopped_days": 4
+}

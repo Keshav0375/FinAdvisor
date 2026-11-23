@@ -1,0 +1,18 @@
+{
+ "kind": "sql#backupRunsList",
+ "items": [
+  {
+   "kind": "sql#backupRun",
+   "id": "1790910007000",
+   "status": "SUCCESSFUL",
+   "type": "AUTOMATED",
+   "enqueuedTime": "2026-10-02T03:00:07.120Z",
+   "startTime": "2026-10-02T03:00:08.004Z",
+   "endTime": "2026-10-02T03:04:41.310Z",
+   "windowStartTime": "2026-10-02T03:00:00.000Z",
+   "instance": "fa-spike-backup",
+   "location": "us",
+   "backupKind": "SNAPSHOT"
+  }
+ ]
+}
