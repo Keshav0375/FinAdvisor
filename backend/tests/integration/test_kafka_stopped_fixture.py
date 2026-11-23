@@ -1,20 +1,20 @@
 """`kafka_stopped` stops the compose broker for a test and leaves it healthy afterwards.
 
-Needs the compose stack of `make test-integration` (KAFKA_COMPOSE=1); skipped elsewhere, or failed
-with REQUIRE_SERVICES=1 when the compose broker is down.
+Needs the compose stack of `make test-integration` (KAFKA_COMPOSE=1): marked `compose_only`, so
+the tests are deselected (not skipped) without it, and fail with REQUIRE_SERVICES=1 when the
+compose broker is down.
 """
 
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 
 from tests.conftest import require_service
 from tests.helpers.kafka_control import compose, kafka_off, kafka_state
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.compose_only]
 
 
 def test_broker_is_not_running_inside_the_fixture(kafka_stopped: None) -> None:
@@ -25,8 +25,6 @@ def test_broker_is_not_running_inside_the_fixture(kafka_stopped: None) -> None:
 
 
 def test_broker_is_healthy_again_after_the_block() -> None:
-    if os.environ.get("KAFKA_COMPOSE") != "1":
-        pytest.skip("KAFKA_COMPOSE=1 not set: Kafka is not a compose service here")
     before = kafka_state()
     require_service("Kafka (docker compose)", before.healthy, f"compose kafka is {before.state}")
     with kafka_off():

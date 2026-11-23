@@ -67,7 +67,10 @@ in `n` interleavings against the integration Postgres (`async_engine` fixture).
 teardown (also when the test fails). It is the setup for erasure with Kafka stopped (E12).
 
 The fixture drives the compose project of `make test-integration`, which exports `KAFKA_COMPOSE=1`,
-`COMPOSE_PROJECT_NAME` and `COMPOSE_ENV_FILES`. Without `KAFKA_COMPOSE=1` (for example where Kafka is a
-CI service container, not a compose service) the fixture skips the test. `COMPOSE_WAIT_TIMEOUT_S`
-(default 300) is how long the restart waits for healthy; `KAFKA_DOCKER_TIMEOUT_S` (default 60) bounds
-the other docker calls.
+`COMPOSE_PROJECT_NAME` and `COMPOSE_ENV_FILES`. Mark every test that uses it
+`@pytest.mark.compose_only` (the whole module with `pytestmark`). A `compose_only` test is
+**deselected, not skipped**, unless `KAFKA_COMPOSE=1`: where Kafka is a CI service container, not a
+compose service, there is no project to stop, and a skipped integration test would fail the CI
+no-skips check. With `KAFKA_COMPOSE=1` the broker must run when the test starts (a failure with
+`REQUIRE_SERVICES=1`, a skip otherwise). `COMPOSE_WAIT_TIMEOUT_S` (default 300) is how long the
+restart waits for healthy; `KAFKA_DOCKER_TIMEOUT_S` (default 60) bounds the other docker calls.
