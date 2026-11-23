@@ -1,0 +1,551 @@
+{
+ "status_counts": {
+  "200": 21,
+  "0": 2,
+  "404": 2
+ },
+ "probes": [
+  {
+   "label": "versions_mifid2",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 5.240111708058976,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 5376,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "languages_mifid2",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 26.672885708976537,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 73539,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "versions_mifir",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 4.818232957972214,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 4251,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "languages_mifir",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 3.770525334053673,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 60315,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "versions_priips",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 4.648849458084442,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 2001,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "languages_priips",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 3.845747165963985,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 27483,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "versions_dr_2017_565",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 0,
+     "location": null,
+     "seconds": 60.00471041700803,
+     "error": "ReadTimeout"
+    }
+   ],
+   "status": 0,
+   "content_type": null,
+   "content_language": null,
+   "body_bytes": 0,
+   "rate_headers": {},
+   "error": "ReadTimeout"
+  },
+  {
+   "label": "languages_dr_2017_565",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 4.102763833943754,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 28167,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "versions_rts_2017_653",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 3.5834985420806333,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 2751,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "languages_rts_2017_653",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 4.44964454206638,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 36831,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "poll_last_modification",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 5.025682957959361,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 8536,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "corrigenda_mifid2",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 3.6200326669495553,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 4718,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "corrigenda_mifir",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 6.868970916024409,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 2782,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "corrigenda_priips",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 4.499038332956843,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 2056,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "corrigenda_dr_2017_565",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 3.8585446249926463,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 2298,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "corrigenda_rts_2017_653",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 5.850486958981492,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 2056,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "corrigendum_languages",
+   "accept": "application/sparql-results+json",
+   "language": null,
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/webapi/rdf/sparql",
+     "status": 200,
+     "location": null,
+     "seconds": 0.10760395904071629,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/sparql-results+json",
+   "content_language": null,
+   "body_bytes": 222,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "xhtml_eng",
+   "accept": "application/xhtml+xml",
+   "language": "ENG",
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/resource/celex/02014R0600-20251123",
+     "status": 303,
+     "location": "http://publications.europa.eu/resource/cellar/f759d033-0147-11f1-825d-01aa75ed71a1.0006.02/DOC_1",
+     "seconds": 0.1580334590980783,
+     "error": null
+    },
+    {
+     "url": "https://publications.europa.eu/resource/cellar/f759d033-0147-11f1-825d-01aa75ed71a1.0006.02/DOC_1",
+     "status": 200,
+     "location": null,
+     "seconds": 0.3889362500049174,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/xhtml+xml;charset=UTF-8",
+   "content_language": "",
+   "body_bytes": 721056,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "xhtml_deu",
+   "accept": "application/xhtml+xml",
+   "language": "DEU",
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/resource/celex/02014R0600-20251123",
+     "status": 303,
+     "location": "http://publications.europa.eu/resource/cellar/f759d033-0147-11f1-825d-01aa75ed71a1.0005.02/DOC_1",
+     "seconds": 0.19293195789214224,
+     "error": null
+    },
+    {
+     "url": "https://publications.europa.eu/resource/cellar/f759d033-0147-11f1-825d-01aa75ed71a1.0005.02/DOC_1",
+     "status": 200,
+     "location": null,
+     "seconds": 0.29073641600552946,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/xhtml+xml;charset=UTF-8",
+   "content_language": "",
+   "body_bytes": 758102,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "xhtml_fra",
+   "accept": "application/xhtml+xml",
+   "language": "FRA",
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/resource/celex/02014R0600-20251123",
+     "status": 303,
+     "location": "http://publications.europa.eu/resource/cellar/f759d033-0147-11f1-825d-01aa75ed71a1.0009.02/DOC_1",
+     "seconds": 0.17119366698898375,
+     "error": null
+    },
+    {
+     "url": "https://publications.europa.eu/resource/cellar/f759d033-0147-11f1-825d-01aa75ed71a1.0009.02/DOC_1",
+     "status": 200,
+     "location": null,
+     "seconds": 0.28434262494556606,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/xhtml+xml;charset=UTF-8",
+   "content_language": "",
+   "body_bytes": 804258,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "formex_eng",
+   "accept": "application/zip;mtype=fmx4",
+   "language": "ENG",
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/resource/celex/02014R0600-20251123",
+     "status": 303,
+     "location": "http://publications.europa.eu/resource/cellar/f759d033-0147-11f1-825d-01aa75ed71a1.0006.01/zip",
+     "seconds": 0.11138933396432549,
+     "error": null
+    },
+    {
+     "url": "https://publications.europa.eu/resource/cellar/f759d033-0147-11f1-825d-01aa75ed71a1.0006.01/zip",
+     "status": 200,
+     "location": null,
+     "seconds": 0.17863141593988985,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/zip;charset=UTF-8",
+   "content_language": null,
+   "body_bytes": 82875,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "text_html_eng",
+   "accept": "text/html",
+   "language": "ENG",
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/resource/celex/02014R0600-20251123",
+     "status": 404,
+     "location": null,
+     "seconds": 0.107095375075005,
+     "error": null
+    }
+   ],
+   "status": 404,
+   "content_type": null,
+   "content_language": null,
+   "body_bytes": 214,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "pdf_eng",
+   "accept": "application/pdf",
+   "language": "ENG",
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/resource/celex/02014R0600-20251123",
+     "status": 404,
+     "location": null,
+     "seconds": 0.10614608391188085,
+     "error": null
+    }
+   ],
+   "status": 404,
+   "content_type": null,
+   "content_language": null,
+   "body_bytes": 214,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "corrigendum_xhtml",
+   "accept": "application/xhtml+xml",
+   "language": "FRA",
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/resource/cellar/fe1d3742-760c-11e4-b593-01aa75ed71a1",
+     "status": 303,
+     "location": "http://publications.europa.eu/resource/cellar/fe1d3742-760c-11e4-b593-01aa75ed71a1.0001.03/DOC_1",
+     "seconds": 0.2007850839290768,
+     "error": null
+    },
+    {
+     "url": "https://publications.europa.eu/resource/cellar/fe1d3742-760c-11e4-b593-01aa75ed71a1.0001.03/DOC_1",
+     "status": 200,
+     "location": null,
+     "seconds": 0.15009783301502466,
+     "error": null
+    }
+   ],
+   "status": 200,
+   "content_type": "application/xhtml+xml;charset=UTF-8",
+   "content_language": "",
+   "body_bytes": 2463,
+   "rate_headers": {},
+   "error": null
+  },
+  {
+   "label": "corrigendum_formex",
+   "accept": "application/zip;mtype=fmx4",
+   "language": "FRA",
+   "hops": [
+    {
+     "url": "https://publications.europa.eu/resource/cellar/fe1d3742-760c-11e4-b593-01aa75ed71a1",
+     "status": 303,
+     "location": "http://publications.europa.eu/resource/cellar/fe1d3742-760c-11e4-b593-01aa75ed71a1.0001.02/zip",
+     "seconds": 0.10510416701436043,
+     "error": null
+    },
+    {
+     "url": "https://publications.europa.eu/resource/cellar/fe1d3742-760c-11e4-b593-01aa75ed71a1.0001.02/zip",
+     "status": 0,
+     "location": null,
+     "seconds": 18.193481332971714,
+     "error": "ReadError"
+    }
+   ],
+   "status": 0,
+   "content_type": null,
+   "content_language": null,
+   "body_bytes": 0,
+   "rate_headers": {},
+   "error": "ReadError"
+  }
+ ]
+}
