@@ -1,0 +1,5 @@
+{
+ "_demo": "demo fixture, from docs: arch says the connector suspends on 401 or 403; the body is assumed, not observed. Confirm with the real account (K7).",
+ "error": "forbidden",
+ "message": "The login is suspended."
+}

@@ -1,0 +1,5 @@
+{
+ "_demo": "demo fixture, from docs: the docs say a past date returns an error; the status code (400) and body are assumed, not observed. Confirm with the real account (K7).",
+ "error": "past_date_not_available",
+ "message": "Only current and future versions of Handbook content are available."
+}
