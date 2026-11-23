@@ -7,7 +7,7 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    # Throwaway pgvector for the migration integration tests (same tag as the eval-gate job).
+    # Throwaway pgvector and single-node Kafka for the integration tests (same tags as ci.yml).
     services:
       postgres:
         image: pgvector/pgvector:0.8.5-pg16
@@ -22,6 +22,42 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      kafka:
+        image: apache/kafka:4.4.0
+        env:
+          KAFKA_NODE_ID: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_LISTENERS: CONTROLLER://:29093,PLAINTEXT://:9092
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:29093
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+        ports:
+          - 9092:9092
+        options: >-
+          --health-cmd "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 10
+    # Throwaway, non-placeholder values so the typed Settings boot; never real secrets. DB_* point
+    # at the postgres service: the integration tests build their database URL from them.
+    env:
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_NAME: finadvisor_test
+      DB_USER: test
+      DB_PASSWORD: test
+      DB_POOL_SIZE: "5"
+      DB_STATEMENT_TIMEOUT_MS: "30000"
+      ANTHROPIC_API_KEY: ci-unused-anthropic-key
+      ANTHROPIC_BASE_URL: https://api.anthropic.com
+      VOYAGE_API_KEY: ci-unused-voyage-key
+      JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
     defaults:
       run:
         working-directory: backend
@@ -49,42 +85,20 @@ jobs:
         run: poetry run mypy src/
 
       - name: Unit tests
-        run: poetry run pytest tests/ -x --tb=short
-        # Throwaway, non-placeholder values so the typed Settings boot; never real secrets.
-        # No TEST_DATABASE_URL here, so DB-backed tests skip.
-        env:
-          DB_HOST: db.ci.invalid
-          DB_NAME: finadvisor_ci
-          DB_USER: ci_user
-          DB_PASSWORD: ci-unused-db-pass
-          DB_POOL_SIZE: "5"
-          DB_STATEMENT_TIMEOUT_MS: "30000"
-          ANTHROPIC_API_KEY: ci-unused-anthropic-key
-          ANTHROPIC_BASE_URL: https://api.anthropic.com
-          VOYAGE_API_KEY: ci-unused-voyage-key
-          JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
+        # Needs no service: the unit tests never open a connection.
+        run: poetry run pytest -m "not integration" -x --tb=short
 
-      - name: Migration tests (Postgres)
-        # Only these files get TEST_DATABASE_URL: the rest of the DB-backed suite needs seeded
-        # data (ingest with real keys) and runs in eval-gate. psql/pg_dump must exist, or the
-        # migration tests would skip and pass silently.
+      - name: Integration tests (Postgres, Kafka)
+        # REQUIRE_SERVICES=1: an unreachable service or a missing psql/pg_dump fails the run
+        # instead of skipping tests and passing silently.
         run: |
           psql --version
           pg_dump --version
           pg_isready -h localhost -U test
-          poetry run pytest tests/test_migrations.py tests/test_entrypoint.py -v --tb=short
+          poetry run pytest -m integration -x --tb=short
         env:
-          DB_HOST: db.ci.invalid
-          DB_NAME: finadvisor_ci
-          DB_USER: ci_user
-          DB_PASSWORD: ci-unused-db-pass
-          DB_POOL_SIZE: "5"
-          DB_STATEMENT_TIMEOUT_MS: "30000"
-          ANTHROPIC_API_KEY: ci-unused-anthropic-key
-          ANTHROPIC_BASE_URL: https://api.anthropic.com
-          VOYAGE_API_KEY: ci-unused-voyage-key
-          JWT_SECRET: ci-unused-jwt-secret-0123456789-abcdefghij
-          TEST_DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/finadvisor_test
+          REQUIRE_SERVICES: "1"
+          KAFKA_BOOTSTRAP: localhost:9092
 
   # The eval gate needs real API keys. Without them eval-gate shows as Skipped (gray), never as
   # a fake green, and this job leaves a visible notice. Keys are never faked.
