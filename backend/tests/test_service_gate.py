@@ -40,7 +40,14 @@ FORMER_REQUIRES_DB = {
     "test_rls_e2e.py": 5,
     "test_search_kb.py": 2,
 }
-EXPECTED_INTEGRATION_COUNT = sum(FORMER_REQUIRES_DB.values()) + 1
+# Integration tests added since, per file: the Kafka reachability test (E0-T12) and the test
+# helpers' tests (E0-T15: the Postgres race test, the two `kafka_stopped` tests).
+ADDED_INTEGRATION = {
+    "integration/test_kafka_reachable.py": 1,
+    "helpers/test_race_harness.py": 1,
+    "integration/test_kafka_stopped_fixture.py": 2,
+}
+EXPECTED_INTEGRATION_COUNT = sum(FORMER_REQUIRES_DB.values()) + sum(ADDED_INTEGRATION.values())
 
 DB_KEYS = ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD")
 FULL_ENV = {
@@ -273,7 +280,8 @@ def test_integration_selection_lists_every_former_requires_db_test() -> None:
     assert len(ids) == EXPECTED_INTEGRATION_COUNT, ids
     for name, count in FORMER_REQUIRES_DB.items():
         assert sum(1 for i in ids if i.startswith(f"tests/{name}::")) == count, name
-    assert any(i.startswith("tests/integration/test_kafka_reachable.py::") for i in ids)
+    for name, count in ADDED_INTEGRATION.items():
+        assert sum(1 for i in ids if i.startswith(f"tests/{name}::")) == count, name
 
 
 # AC3, dry run of the Makefile

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://source.example.invalid/v1/quotes?symbol=DEMO"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"symbol\": \"DEMO\", \"price\": 101.25}",
+        "body_encoding": "utf-8"
+      }
+    }
+  ]
+}

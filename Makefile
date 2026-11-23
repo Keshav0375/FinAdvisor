@@ -55,3 +55,17 @@ test-integration:
 	@test -f $(ENV_FILE) || { echo "$(ENV_FILE) not found" >&2; exit 1; }
 	trap '$(DEPS_DOWN)' EXIT INT TERM; \
 	$(DEPS_UP) && (cd backend && REQUIRE_SERVICES=1 $(PYTEST) -m integration -q)
+
+# Stop and start only the broker of the stack (edge case: erasure with Kafka stopped). The
+# `kafka_stopped` pytest fixture runs the same two commands; test-integration exports the compose
+# env file and KAFKA_COMPOSE=1 so that the fixture drives the stack this target started.
+.PHONY: kafka-stop kafka-start
+
+kafka-stop:
+	$(COMPOSE) stop kafka
+
+kafka-start:
+	$(COMPOSE) up -d --wait --wait-timeout $(COMPOSE_WAIT_TIMEOUT_S) kafka
+
+test-integration: export COMPOSE_ENV_FILES = $(ENV_FILE)
+test-integration: export KAFKA_COMPOSE = 1
