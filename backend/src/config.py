@@ -107,6 +107,10 @@ class Settings(BaseSettings):
     # Source connectors: max requests per second to the eCFR versioner API. No vendor limit is
     # published (docs/spikes/ecfr-api.md), so this is the arch's own conservative figure.
     ecfr_rate_limit_rps: float = _env("CONNECTOR_RATE_RPS_ECFR", default=1.0, gt=0)
+    # Max requests per second to EUR-Lex CELLAR (SPARQL and REST). No vendor limit is published
+    # and none was hit in the probe (docs/spikes/cellar-api.md), so this is the arch's own
+    # conservative figure.
+    eurlex_rate_limit_rps: float = _env("CONNECTOR_RATE_RPS_EURLEX", default=1.0, gt=0)
 
     # Max requests per second to the FCA Handbook API. No vendor limit is published
     # (docs/spikes/fca-handbook-api.md), so this is a conservative figure. The mode, key and the

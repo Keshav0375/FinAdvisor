@@ -179,6 +179,29 @@ class TestEcfrRateLimit:
         assert "CONNECTOR_RATE_RPS_ECFR=1.0" in example
 
 
+class TestEurlexRateLimit:
+    def test_eurlex_rate_limit_config_present(self) -> None:
+        # The ticket calls it EURLEX_RATE_LIMIT_RPS; the env name follows arch 06 section 6.7
+        # (CONNECTOR_RATE_RPS_<SOURCE>) and the field is `eurlex_rate_limit_rps`.
+        assert "CONNECTOR_RATE_RPS_EURLEX" not in REQUIRED_KEYS
+        assert build().eurlex_rate_limit_rps == 1.0
+        example = (BACKEND_DIR.parent / ".env.example").read_text(encoding="utf-8")
+        assert "CONNECTOR_RATE_RPS_EURLEX=1.0" in example
+
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CONNECTOR_RATE_RPS_EURLEX", "0.5")
+        assert build().eurlex_rate_limit_rps == 0.5
+
+    @pytest.mark.parametrize("value", ["0", "-1", "abc"])
+    def test_bad_value_rejected_naming_the_variable(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("CONNECTOR_RATE_RPS_EURLEX", value)
+        with pytest.raises(ValidationError) as exc:
+            build()
+        assert "CONNECTOR_RATE_RPS_EURLEX" in str(exc.value)
+
+
 class TestFcaApiRateLimit:
     def test_default_is_one_request_per_second_and_not_required(self) -> None:
         assert "FCA_API_RATE_LIMIT_RPS" not in REQUIRED_KEYS
