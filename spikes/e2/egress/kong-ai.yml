@@ -1,0 +1,58 @@
+_format_version: "3.0"
+
+# E2-T2 spike config, ai-proxy variant (route_type preserve, provider anthropic). Experiment only: it
+# records what OSS ai-proxy 3.9.4 does with Anthropic. run.sh renders the placeholders; none is a secret.
+# The Anthropic key is read by Kong from the container environment (vault env).
+#
+# upstream_path is needed: without it preserve forwards the client path (/egress/anthropic/v1/messages)
+# upstream, strip_path notwithstanding. With it every request goes to that one path.
+# No model.name: with a name, ai-proxy rejects any other model in the body (400 "cannot use own model").
+# model_name_header false: otherwise a body without "model" fails in header_filter.
+consumers:
+  - username: chat-api
+    keyauth_credentials:
+      - key: __EGRESS_KEY__
+
+services:
+  - name: llm-egress
+    url: __UPSTREAM__
+    retries: 0
+    routes:
+      - name: llm-egress-anthropic
+        paths: [/egress/anthropic]
+        strip_path: true
+        plugins:
+          - name: key-auth
+            config:
+              key_names: [apikey]
+              hide_credentials: true
+          - name: ip-restriction
+            config:
+              allow: [__ALLOW__]
+          - name: pre-function
+            config:
+              access:
+                - |
+                  kong.log.set_serialize_value("request.headers.x-api-key", "REDACTED")
+          - name: ai-proxy
+            config:
+              route_type: preserve
+              model_name_header: false
+              auth:
+                header_name: x-api-key
+                header_value: "{vault://env/anthropic-api-key}"
+              logging:
+                log_statistics: true
+                log_payloads: false
+              model:
+                provider: anthropic
+                options:
+                  anthropic_version: "2023-06-01"
+                  upstream_url: __UPSTREAM__/v1/messages
+                  upstream_path: /v1/messages
+
+plugins:
+  - name: file-log
+    service: llm-egress
+    config:
+      path: /dev/stdout
