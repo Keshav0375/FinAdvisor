@@ -18,9 +18,6 @@ JWT_SECRET_MIN_LENGTH = 32
 # Hosts where a plain-http LLM endpoint is allowed (local test servers); security floor, not a knob.
 LOCAL_HTTP_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
-# FCA Handbook API key used in demo mode (no account yet, K7). Not a secret; `live` mode rejects it.
-DEMO_FCA_API_KEY = "demo-fca-key"
-
 MODEL_LIFECYCLE_SOURCE_URL = "https://platform.claude.com/docs/en/about-claude/model-deprecations"
 
 
@@ -48,18 +45,6 @@ LIFECYCLE_TABLE: dict[str, ModelLifecycle] = {
         ModelLifecycle("claude-sonnet-4-20250514", retires=date(2026, 6, 15)),
     )
 }
-
-
-def fca_key_problem(mode: str, key: str) -> str | None:
-    """Why `key` cannot be used with FCA_API_MODE=`mode`, or None. Never echoes the key."""
-    stripped = key.strip()
-    if not stripped:
-        return "must not be empty"
-    if stripped.lower() in PLACEHOLDER_SECRETS:
-        return "is still a placeholder; set a real value"
-    if mode == "live" and stripped == DEMO_FCA_API_KEY:
-        return "is the demo key; FCA_API_MODE=live needs the key of a real FCA Handbook API account"
-    return None
 
 
 def _env(name: str, **kwargs: Any) -> Any:
@@ -119,11 +104,9 @@ class Settings(BaseSettings):
     # Seconds /readyz serves its last result (also a failing one) before probing again.
     readiness_cache_ttl_s: float = _env("READINESS_CACHE_TTL_S", default=5.0, gt=0)
 
-    # FCA Handbook API (E11-T1 spike). `demo` replays recorded demo fixtures with no network;
-    # `live` needs a real account key. The rate is the max requests per second the spike and the
-    # future connector send; no vendor limit is published (docs/spikes/fca-handbook-api.md).
-    fca_api_mode: Literal["demo", "live"] = _env("FCA_API_MODE", default="demo")
-    fca_api_key: SecretStr = _env("FCA_API_KEY", default=SecretStr(DEMO_FCA_API_KEY))
+    # Source connectors: max requests per second to the FCA Handbook API. No vendor limit is
+    # published (docs/spikes/fca-handbook-api.md), so this is a conservative figure. The mode, key
+    # and the other FCA knobs belong to the connector (E11-T20), not to app boot.
     fca_api_rate_limit_rps: float = _env("FCA_API_RATE_LIMIT_RPS", default=1.0, gt=0)
 
     # PII
@@ -181,9 +164,6 @@ class Settings(BaseSettings):
     def _check_cross_field_rules(self) -> Settings:
         if self.llm_model_judge == self.llm_model_answer:
             raise ValueError("LLM_MODEL_JUDGE must differ from LLM_MODEL_ANSWER")
-        problem = fca_key_problem(self.fca_api_mode, self.fca_api_key.get_secret_value())
-        if problem:
-            raise ValueError(f"FCA_API_KEY {problem}")
         if self.langfuse_enabled:
             missing = [
                 name

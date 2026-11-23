@@ -13,10 +13,11 @@ account (K7):
         --base-url <API base URL from the Handbook API page> \\
         --out-dir tests/fixtures/fca_api/recorded
 
-Live sends 5 fixed requests plus a burst of RATE_BURST_REQUESTS, at most FCA_API_RATE_LIMIT_RPS per
-second (a higher --rps is refused unless --allow-above-limit is given), with a descriptive
-User-Agent. The key is sent only in the auth header and is never printed or logged. The findings
-are written up in docs/spikes/fca-handbook-api.md.
+Live sends 4 fixed requests plus a burst of FCA_API_BURST_REQUESTS (demo: 5 fixed), at most
+FCA_API_RATE_LIMIT_RPS per second (a higher --rps is refused unless --allow-above-limit is given),
+with a descriptive User-Agent, and only to an fca.org.uk host unless --allow-any-host is given. The
+key is sent only in the auth header and is never printed or logged. The findings are written up in
+docs/spikes/fca-handbook-api.md.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import re
 import sys
 import time
@@ -32,13 +32,15 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Annotated, Any, Literal, cast
+from typing import Any, Literal, cast
+from urllib.parse import urlsplit
 
 import httpx
 import structlog
-from pydantic import BaseModel, SecretStr, TypeAdapter, ValidationError
+from pydantic import BaseModel, Field, SecretStr, ValidationError, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from src.config import DEMO_FCA_API_KEY, Settings, fca_key_problem
+from src.config import PLACEHOLDER_SECRETS, Settings
 
 Mode = Literal["demo", "live"]
 
@@ -46,28 +48,68 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 FIXTURES_DIR = PROJECT_ROOT / "backend" / "tests" / "fixtures" / "fca_api"
 DEFAULT_LIVE_OUT_DIR = FIXTURES_DIR / "recorded"
 
-# Everything below is spike-local on purpose: this script is run by hand, once, and the FCA does
-# not publish its endpoint paths, auth header or field names where they can be read without a
-# login (docs/spikes/fca-handbook-api.md). The connector (E11-T20) moves what it needs into
-# Settings as FCA_API knobs, together with the throttle and the mode, so the single typed config
-# stays the only place for tunables.
+DEMO_FCA_API_KEY = "demo-fca-key"  # not a secret: demo mode only, live mode refuses it
+
+
+class FcaSpikeSettings(BaseSettings):
+    """Spike-local knobs, read from FCA_API_* environment variables.
+
+    Spike-local on purpose: this script is run by hand, once. The connector (E11-T20) moves the
+    mode, key, timeout, burst and base URL into its own config, so app boot never depends on
+    them. The rate stays in the global Settings (FCA_API_RATE_LIMIT_RPS); this reads its default.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="FCA_API_", extra="ignore", hide_input_in_errors=True
+    )
+
+    mode: Mode = "demo"
+    key: SecretStr = SecretStr(DEMO_FCA_API_KEY)
+    timeout_s: float = Field(default=30.0, gt=0)
+    # Repeat reads of the first module after the fixed probes, to look for a limit at the rate.
+    burst_requests: int = Field(default=10, gt=0)
+    # Past-date probe: this many days before today (docs: only current and future versions).
+    past_date_offset_days: int = Field(default=30, gt=0)
+    base_url: str | None = None
+    rate_limit_rps: float = Field(
+        default=Settings.model_fields["fca_api_rate_limit_rps"].default,
+        gt=0,
+        validation_alias="FCA_API_RATE_LIMIT_RPS",
+    )
+
+    @model_validator(mode="after")
+    def _check_key(self) -> FcaSpikeSettings:
+        key = self.key.get_secret_value().strip()
+        if not key:
+            raise ValueError("FCA_API_KEY must not be empty")
+        if key.lower() in PLACEHOLDER_SECRETS:
+            raise ValueError("FCA_API_KEY is still a placeholder; set a real value")
+        if self.mode == "live" and key == DEMO_FCA_API_KEY:
+            raise ValueError(
+                "FCA_API_KEY is the demo key; FCA_API_MODE=live needs the key of a real "
+                "FCA Handbook API account"
+            )
+        return self
+
+
+# Everything below is spike-local too: the FCA does not publish its endpoint paths, auth header or
+# field names where they can be read without a login (docs/spikes/fca-handbook-api.md).
 DEMO_BASE_URL = "https://fca-handbook-demo.invalid"  # RFC 2606 .invalid: never resolves
 # ASSUMPTION: path and date parameter are not published; --module-path overrides the path.
 MODULE_PATH_DEFAULT = "/handbook/{sourcebook}/{chapter}"
 DATE_PARAM = "date"
 # ASSUMPTION: the auth header name is not published; --auth-header overrides it.
 AUTH_HEADER_DEFAULT = "X-Api-Key"
+# ASSUMPTION: the API lives on an fca.org.uk host (the Handbook API page is on handbook.fca.org.uk).
+FCA_HOST_SUFFIX = "fca.org.uk"
 USER_AGENT = "FinAdvisor-spike/0.1 (FCA Handbook API probe; research prototype)"
 MODULES: tuple[tuple[str, str], ...] = (("COBS", "9A"), ("COBS", "6"))
-# Past-date probe: this many days before today (docs: only current and future versions exist).
-PAST_DATE_OFFSET_DAYS = 30
-# Repeat reads of the first module after the fixed probes, to look for a limit at the set rate.
-RATE_BURST_REQUESTS = 10
-TIMEOUT_S = 30.0
-# Keys that stand in for a revoked and a suspended login. Demo answers 401 and 403; a live API
-# cannot be made to revoke a login, so live records what an unknown key gets (docs, finding 5).
+# Keys that stand in for a revoked and a suspended login. Demo answers 401 and 403. A live API
+# cannot be made to revoke a login, so live sends one unknown key and labels the row as such.
 DEMO_REVOKED_KEY = "demo-revoked-key"
 DEMO_SUSPENDED_KEY = "demo-suspended-key"
+UNKNOWN_KEY = "unknown-key-probe"
+UNKNOWN_KEY_LABEL = "unknown-key response (no revoked key available)"
 DEMO_SOURCE = "demo fixture, from docs"
 DEMO_MARKER = "_demo"
 # Response headers that could carry a vendor limit; recorded when present.
@@ -102,13 +144,6 @@ class Probe:
     status: int
     content_type: str | None
     rate_headers: dict[str, str]
-
-
-@dataclass(frozen=True)
-class FcaConfig:
-    mode: Mode
-    key: SecretStr
-    rps: float
 
 
 class Throttle:
@@ -156,34 +191,19 @@ def parse_module(payload: Mapping[str, Any]) -> ModuleResponse:
         raise SampleError(f"module response does not parse: {fields}") from exc
 
 
-def _field_from_env(field_name: str, env_name: str, env: Mapping[str, str]) -> Any:
-    """A Settings field's value from `env_name`, validated by the field's own type and limits.
-
-    Does not build Settings (which would need every secret for a script that only probes one API).
-    """
-    field = Settings.model_fields[field_name]
-    raw = env.get(env_name)
-    if raw is None:
-        return field.default
-    adapter: TypeAdapter[Any] = TypeAdapter(
-        Annotated[field.annotation, *field.metadata] if field.metadata else field.annotation
-    )
+def load_settings() -> FcaSpikeSettings:
+    """FcaSpikeSettings from the environment; a bad value raises ValueError naming its variable."""
     try:
-        return adapter.validate_python(raw)
+        return FcaSpikeSettings()
     except ValidationError as exc:
-        raise ValueError(f"{env_name}={raw!r} is invalid: {exc.errors()[0]['msg']}") from exc
-
-
-def configured_fca(environ: Mapping[str, str] | None = None) -> FcaConfig:
-    """Mode, key and rate from FCA_API_MODE, FCA_API_KEY and FCA_API_RATE_LIMIT_RPS."""
-    env = os.environ if environ is None else environ
-    mode: Mode = _field_from_env("fca_api_mode", "FCA_API_MODE", env)
-    raw_key = env.get("FCA_API_KEY")
-    key = (
-        SecretStr(raw_key) if raw_key is not None else Settings.model_fields["fca_api_key"].default
-    )
-    rps = float(_field_from_env("fca_api_rate_limit_rps", "FCA_API_RATE_LIMIT_RPS", env))
-    return FcaConfig(mode=mode, key=key, rps=rps)
+        problems = []
+        for error in exc.errors():
+            loc = str(error["loc"][0]) if error["loc"] else ""
+            field = FcaSpikeSettings.model_fields.get(loc)
+            if field is not None and field.validation_alias is None:
+                loc = f"FCA_API_{loc.upper()}"
+            problems.append(f"{loc}: {error['msg']}" if loc else str(error["msg"]))
+        raise ValueError("; ".join(problems)) from exc
 
 
 def resolve_rps(requested: float | None, configured: float, allow_above_limit: bool) -> float:
@@ -198,16 +218,30 @@ def resolve_rps(requested: float | None, configured: float, allow_above_limit: b
     return requested
 
 
-def validate_target(mode: Mode, key: str, base_url: str | None) -> None:
-    """Refuse a run that could not work, or could send a key somewhere unsafe."""
-    problem = fca_key_problem(mode, key)
-    if problem:
-        raise ValueError(f"FCA_API_KEY {problem}")
-    if mode == "live":
-        if not base_url:
-            raise ValueError("live mode needs --base-url (the API base URL from your account)")
-        if not base_url.startswith("https://"):
-            raise ValueError("--base-url must use https (the key is sent to it)")
+def host_allowed(host: str) -> bool:
+    return host == FCA_HOST_SUFFIX or host.endswith(f".{FCA_HOST_SUFFIX}")
+
+
+def validate_base_url(mode: Mode, base_url: str | None, allow_any_host: bool) -> None:
+    """Refuse a live target that is missing, not https, carries credentials or is not FCA's."""
+    if mode != "live":
+        return
+    if not base_url:
+        raise ValueError("live mode needs --base-url (the API base URL from your account)")
+    try:
+        parts = urlsplit(base_url)
+        host = parts.hostname
+    except ValueError:
+        raise ValueError("--base-url is not a valid URL") from None
+    if parts.scheme != "https" or not host:
+        raise ValueError("--base-url must be an absolute https URL (the key is sent to it)")
+    if parts.username is not None or parts.password is not None:
+        raise ValueError("--base-url must not contain credentials (userinfo)")
+    if not allow_any_host and not host_allowed(host):
+        raise ValueError(
+            f"--base-url host {host!r} is not an {FCA_HOST_SUFFIX} host; "
+            "pass --allow-any-host to send the key there anyway"
+        )
 
 
 def build_demo_transport(auth_header: str, today: date) -> httpx.MockTransport:
@@ -237,8 +271,10 @@ def build_demo_transport(auth_header: str, today: date) -> httpx.MockTransport:
     return httpx.MockTransport(handler)
 
 
-def make_client(transport: httpx.AsyncBaseTransport | None = None) -> httpx.AsyncClient:
-    return httpx.AsyncClient(transport=transport, timeout=TIMEOUT_S)
+def make_client(
+    transport: httpx.AsyncBaseTransport | None = None, timeout_s: float = 30.0
+) -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=transport, timeout=timeout_s)
 
 
 def rate_headers(headers: httpx.Headers) -> dict[str, str]:
@@ -296,11 +332,10 @@ def stderr_logger() -> Any:
 async def run(
     client: httpx.AsyncClient,
     throttle: Throttle,
+    settings: FcaSpikeSettings,
     *,
-    mode: Mode,
     base_url: str,
     auth_header: str,
-    key: str,
     module_path: str,
     today: date,
     out_dir: Path | None,
@@ -308,6 +343,7 @@ async def run(
     """Probe and report. Probes record raw statuses, so there are no retries on purpose."""
     probes: list[Probe] = []
     log = stderr_logger()
+    key = settings.key.get_secret_value()
 
     async def fetch(
         label: str, sourcebook: str, chapter: str, params: dict[str, str], use_key: str
@@ -332,25 +368,32 @@ async def run(
 
     first: httpx.Response | None = None
     for sourcebook, chapter in MODULES:
-        label = f"{sourcebook} {chapter} current"
-        response = await fetch(label, sourcebook, chapter, {}, key)
+        response = await fetch(f"{sourcebook} {chapter} current", sourcebook, chapter, {}, key)
         if first is None:
             first = response
         body = body_json(response)
         if out_dir is not None and response.status_code == 200 and body is not None:
             write_sample(out_dir, f"{sourcebook.lower()}_{chapter.lower()}_module.json", body)
-    assert first is not None
+    if first is None:
+        raise ValueError("MODULES is empty")
     sourcebook, chapter = MODULES[0]
 
-    past_date = (today - timedelta(days=PAST_DATE_OFFSET_DAYS)).isoformat()
+    offset = timedelta(days=settings.past_date_offset_days)
+    past_date = (today - offset).isoformat()
     past = await fetch("past date", sourcebook, chapter, {DATE_PARAM: past_date}, key)
-    revoked = await fetch("revoked login", sourcebook, chapter, {}, DEMO_REVOKED_KEY)
-    suspended = await fetch("suspended login", sourcebook, chapter, {}, DEMO_SUSPENDED_KEY)
+    auth: dict[str, int] = {}
+    if settings.mode == "demo":
+        revoked = await fetch("revoked login", sourcebook, chapter, {}, DEMO_REVOKED_KEY)
+        suspended = await fetch("suspended login", sourcebook, chapter, {}, DEMO_SUSPENDED_KEY)
+        auth = {"revoked": revoked.status_code, "suspended": suspended.status_code}
+    else:
+        unknown = await fetch(UNKNOWN_KEY_LABEL, sourcebook, chapter, {}, UNKNOWN_KEY)
+        auth = {"unknown_key": unknown.status_code}
 
     burst = 0
     first_429: int | None = None
     retry_after: str | None = None
-    for index in range(1, RATE_BURST_REQUESTS + 1):
+    for index in range(1, settings.burst_requests + 1):
         response = await fetch("burst", sourcebook, chapter, {}, key)
         burst = index
         if response.status_code == 429:
@@ -359,16 +402,16 @@ async def run(
             break
 
     return {
-        "mode": mode,
-        "demo": mode == "demo",
-        "source": DEMO_SOURCE if mode == "demo" else "live",
+        "mode": settings.mode,
+        "demo": settings.mode == "demo",
+        "source": DEMO_SOURCE if settings.mode == "demo" else "live",
         "requests": len(probes),
         "rps": throttle.rps,
         "probes": [p.__dict__ for p in probes],
         "format": describe_format(first),
         "last_modified_header": first.headers.get("last-modified"),
         "past_date": {"date": past_date, "status": past.status_code},
-        "auth": {"revoked": revoked.status_code, "suspended": suspended.status_code},
+        "auth": auth,
         "rate": {
             "requests": burst,
             "rps": throttle.rps,
@@ -388,7 +431,9 @@ async def amain(
     argv: list[str] | None = None, live_transport: httpx.AsyncBaseTransport | None = None
 ) -> int:
     parser = argparse.ArgumentParser(description="Probe the FCA Handbook API (E11-T1 spike)")
-    parser.add_argument("--base-url", default=None, help="API base URL (live mode only)")
+    parser.add_argument(
+        "--base-url", default=None, help="API base URL (live mode only; or FCA_API_BASE_URL)"
+    )
     parser.add_argument("--auth-header", default=AUTH_HEADER_DEFAULT)
     parser.add_argument("--module-path", default=MODULE_PATH_DEFAULT)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_LIVE_OUT_DIR)
@@ -401,32 +446,36 @@ async def amain(
     parser.add_argument(
         "--allow-above-limit", action="store_true", help="allow --rps above the configured limit"
     )
+    parser.add_argument(
+        "--allow-any-host",
+        action="store_true",
+        help=f"allow a live --base-url that is not an {FCA_HOST_SUFFIX} host",
+    )
     args = parser.parse_args(argv)
     try:
-        config = configured_fca()
-        rps = resolve_rps(args.rps, config.rps, args.allow_above_limit)
-        key = config.key.get_secret_value()
-        validate_target(config.mode, key, args.base_url)
+        settings = load_settings()
+        rps = resolve_rps(args.rps, settings.rate_limit_rps, args.allow_above_limit)
+        live_url = args.base_url or settings.base_url
+        validate_base_url(settings.mode, live_url, args.allow_any_host)
     except ValueError as exc:
         parser.error(str(exc))
 
     today = date.today()
-    if config.mode == "demo":
+    if settings.mode == "demo":
         transport: httpx.AsyncBaseTransport | None = build_demo_transport(args.auth_header, today)
         throttle = Throttle(rps, sleep=no_sleep)
         base_url, out_dir = DEMO_BASE_URL, None
     else:
         transport, throttle = live_transport, Throttle(rps)
-        base_url, out_dir = args.base_url, args.out_dir
+        base_url, out_dir = cast("str", live_url), args.out_dir
     try:
-        async with make_client(transport) as client:
+        async with make_client(transport, settings.timeout_s) as client:
             report = await run(
                 client,
                 throttle,
-                mode=config.mode,
+                settings,
                 base_url=base_url,
                 auth_header=args.auth_header,
-                key=key,
                 module_path=args.module_path,
                 today=today,
                 out_dir=out_dir,

@@ -8,13 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from src.config import (
-    DEMO_FCA_API_KEY,
-    JWT_SECRET_MIN_LENGTH,
-    PLACEHOLDER_SECRETS,
-    Settings,
-    fca_key_problem,
-)
+from src.config import JWT_SECRET_MIN_LENGTH, PLACEHOLDER_SECRETS, Settings
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -162,66 +156,34 @@ class TestModels:
             assert settings_env[key] not in str(exc.value)
 
 
-class TestFcaApi:
-    def test_defaults_are_demo_and_not_required(self) -> None:
-        for key in ("FCA_API_MODE", "FCA_API_KEY", "FCA_API_RATE_LIMIT_RPS"):
-            assert key not in REQUIRED_KEYS
-        settings = build()
-        assert settings.fca_api_mode == "demo"
-        assert settings.fca_api_key.get_secret_value() == DEMO_FCA_API_KEY == "demo-fca-key"
-        assert settings.fca_api_rate_limit_rps == 1.0
+class TestFcaApiRateLimit:
+    def test_default_is_one_request_per_second_and_not_required(self) -> None:
+        assert "FCA_API_RATE_LIMIT_RPS" not in REQUIRED_KEYS
+        assert build().fca_api_rate_limit_rps == 1.0
 
-    def test_rate_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("FCA_API_RATE_LIMIT_RPS", "0.5")
         assert build().fca_api_rate_limit_rps == 0.5
 
-    @pytest.mark.parametrize(
-        ("key", "value"),
-        [
-            ("FCA_API_RATE_LIMIT_RPS", "0"),
-            ("FCA_API_RATE_LIMIT_RPS", "-1"),
-            ("FCA_API_RATE_LIMIT_RPS", "abc"),
-            ("FCA_API_MODE", "sandbox"),
-        ],
-    )
+    @pytest.mark.parametrize("value", ["0", "-1", "abc"])
     def test_bad_value_rejected_naming_the_variable(
-        self, monkeypatch: pytest.MonkeyPatch, key: str, value: str
+        self, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
-        monkeypatch.setenv(key, value)
+        monkeypatch.setenv("FCA_API_RATE_LIMIT_RPS", value)
         with pytest.raises(ValidationError) as exc:
             build()
-        assert key in str(exc.value)
+        assert "FCA_API_RATE_LIMIT_RPS" in str(exc.value)
 
-    def test_live_with_a_real_key_builds(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("FCA_API_MODE", "live")
-        monkeypatch.setenv("FCA_API_KEY", "unit-fca-key")
-        settings = build()
-        assert settings.fca_api_mode == "live"
-        assert "unit-fca-key" not in repr(settings)
-
-    @pytest.mark.parametrize("key", [DEMO_FCA_API_KEY, "REPLACE_ME", " ", "changeme"])
-    def test_live_rejects_the_demo_key_blank_and_placeholders(
-        self, monkeypatch: pytest.MonkeyPatch, key: str
+    def test_app_boot_does_not_depend_on_other_fca_settings(
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # The spike's mode and key are not global config (E11-T20 owns them): even a bad value
+        # for them must not stop the app from booting.
         monkeypatch.setenv("FCA_API_MODE", "live")
-        monkeypatch.setenv("FCA_API_KEY", key)
-        with pytest.raises(ValidationError) as exc:
-            build()
-        message = str(exc.value)
-        assert "FCA_API_KEY" in message
-        assert key.strip() not in message or key.strip() == ""
-
-    def test_demo_rejects_a_blank_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("FCA_API_KEY", " ")
-        with pytest.raises(ValidationError) as exc:
-            build()
-        assert "FCA_API_KEY" in str(exc.value)
-
-    def test_key_problem_helper(self) -> None:
-        assert fca_key_problem("demo", DEMO_FCA_API_KEY) is None
-        assert fca_key_problem("live", "unit-fca-key") is None
-        assert fca_key_problem("live", DEMO_FCA_API_KEY) is not None
-        assert fca_key_problem("demo", "") is not None
+        monkeypatch.setenv("FCA_API_KEY", "demo-fca-key")
+        build()
+        fca_fields = [name for name in Settings.model_fields if name.startswith("fca_api_")]
+        assert fca_fields == ["fca_api_rate_limit_rps"]
 
 
 class TestAnthropicBaseUrl:
