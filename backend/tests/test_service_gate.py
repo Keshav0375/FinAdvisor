@@ -40,7 +40,15 @@ FORMER_REQUIRES_DB = {
     "test_rls_e2e.py": 5,
     "test_search_kb.py": 2,
 }
-EXPECTED_INTEGRATION_COUNT = sum(FORMER_REQUIRES_DB.values()) + 1
+# Integration tests added since, per file: the Kafka reachability test (E0-T12) and the Postgres
+# race test of the test helpers (E0-T15).
+ADDED_INTEGRATION = {
+    "integration/test_kafka_reachable.py": 1,
+    "helpers/test_race_harness.py": 1,
+}
+# Marked `compose_only` (E0-T15): selected only with KAFKA_COMPOSE=1, deselected (not skipped) else.
+COMPOSE_ONLY_INTEGRATION = {"integration/test_kafka_stopped_fixture.py": 2}
+EXPECTED_INTEGRATION_COUNT = sum(FORMER_REQUIRES_DB.values()) + sum(ADDED_INTEGRATION.values())
 
 DB_KEYS = ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD")
 FULL_ENV = {
@@ -73,7 +81,8 @@ def _closed_port() -> int:
 
 
 def _subprocess_env(**overrides: str) -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if k not in DB_KEYS and k != "REQUIRE_SERVICES"}
+    ambient = {"REQUIRE_SERVICES", "KAFKA_COMPOSE"}
+    env = {k: v for k, v in os.environ.items() if k not in DB_KEYS and k not in ambient}
     env.update(overrides)
     return env
 
@@ -273,7 +282,17 @@ def test_integration_selection_lists_every_former_requires_db_test() -> None:
     assert len(ids) == EXPECTED_INTEGRATION_COUNT, ids
     for name, count in FORMER_REQUIRES_DB.items():
         assert sum(1 for i in ids if i.startswith(f"tests/{name}::")) == count, name
-    assert any(i.startswith("tests/integration/test_kafka_reachable.py::") for i in ids)
+    for name, count in ADDED_INTEGRATION.items():
+        assert sum(1 for i in ids if i.startswith(f"tests/{name}::")) == count, name
+    for name in COMPOSE_ONLY_INTEGRATION:
+        assert not any(i.startswith(f"tests/{name}::") for i in ids), f"{name} is compose_only"
+
+
+def test_compose_only_tests_are_selected_only_with_kafka_compose() -> None:
+    ids = _collect("integration", _subprocess_env(KAFKA_COMPOSE="1"))
+    assert len(ids) == EXPECTED_INTEGRATION_COUNT + sum(COMPOSE_ONLY_INTEGRATION.values()), ids
+    for name, count in COMPOSE_ONLY_INTEGRATION.items():
+        assert sum(1 for i in ids if i.startswith(f"tests/{name}::")) == count, name
 
 
 # AC3, dry run of the Makefile
