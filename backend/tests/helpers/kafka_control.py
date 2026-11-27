@@ -5,7 +5,8 @@ an argv list (no shell). The compose project and env file come from the environm
 `docker compose` call: `make test-integration` exports COMPOSE_PROJECT_NAME and COMPOSE_ENV_FILES.
 
 Knobs: COMPOSE_WAIT_TIMEOUT_S (default 300, also the Makefile's) is how long a start waits for the
-broker to be healthy; KAFKA_DOCKER_TIMEOUT_S (default 60) bounds the other docker calls.
+broker to be healthy; KAFKA_DOCKER_TIMEOUT_S (default 60) bounds the other docker calls. Both are
+read at each call (`KafkaControlConfig.from_env`); a bad value fails naming the variable.
 """
 
 from __future__ import annotations
@@ -13,17 +14,31 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
 from tests.conftest import BACKEND_DIR
+from tests.helpers.env import positive_number
 
 REPO_ROOT = BACKEND_DIR.parent
 SERVICE = "kafka"
-WAIT_TIMEOUT_S = int(os.environ.get("COMPOSE_WAIT_TIMEOUT_S", "300"))
-DOCKER_TIMEOUT_S = float(os.environ.get("KAFKA_DOCKER_TIMEOUT_S", "60"))
+WAIT_TIMEOUT_ENV = "COMPOSE_WAIT_TIMEOUT_S"
+DOCKER_TIMEOUT_ENV = "KAFKA_DOCKER_TIMEOUT_S"
+
+
+@dataclass(frozen=True)
+class KafkaControlConfig:
+    wait_timeout_s: int
+    docker_timeout_s: float
+
+    @classmethod
+    def from_env(cls, environ: Mapping[str, str]) -> KafkaControlConfig:
+        return cls(
+            wait_timeout_s=positive_number(environ, WAIT_TIMEOUT_ENV, 300, int),
+            docker_timeout_s=positive_number(environ, DOCKER_TIMEOUT_ENV, 60.0, float),
+        )
 
 
 class KafkaControlError(Exception):
@@ -47,7 +62,11 @@ class KafkaState:
         return self.running and self.health == "healthy"
 
 
-def compose(*args: str, timeout_s: float = DOCKER_TIMEOUT_S) -> str:
+def compose(*args: str, timeout_s: float | None = None) -> str:
+    """Run `docker compose <args>` from the repository root; `timeout_s` defaults to
+    KAFKA_DOCKER_TIMEOUT_S."""
+    if timeout_s is None:
+        timeout_s = KafkaControlConfig.from_env(os.environ).docker_timeout_s
     argv = ["docker", "compose", *args]
     try:
         result = subprocess.run(
@@ -95,14 +114,15 @@ def stop_kafka() -> None:
 
 def start_kafka() -> None:
     """Start the broker and wait for its healthcheck; fails unless it is then healthy."""
+    config = KafkaControlConfig.from_env(os.environ)
     compose(
         "up",
         "-d",
         "--wait",
         "--wait-timeout",
-        str(WAIT_TIMEOUT_S),
+        str(config.wait_timeout_s),
         SERVICE,
-        timeout_s=WAIT_TIMEOUT_S + DOCKER_TIMEOUT_S,
+        timeout_s=config.wait_timeout_s + config.docker_timeout_s,
     )
     state = kafka_state()
     if not state.healthy:

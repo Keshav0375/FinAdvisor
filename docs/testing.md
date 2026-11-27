@@ -58,6 +58,11 @@ in `n` interleavings against the integration Postgres (`async_engine` fixture).
   interleaving (`index`, `seed`, `schedule`, `ok`).
 - A step that raises fails the run (`RaceHarnessError` naming the seed); catch expected conflicts
   inside the step.
+- A `cleanup` that raises never hides that failure: it is attached to it as a note. It is raised
+  (naming the seed) only when nothing else failed.
+- The helper knobs (`RACE_STEP_TIMEOUT_S`, `COMPOSE_WAIT_TIMEOUT_S`, `KAFKA_DOCKER_TIMEOUT_S`) are read
+  when a run or call starts. A value that is not a positive number fails with `EnvConfigError`
+  naming the variable. All helper variables are listed, commented, in `.env.example`.
 
 ## Kafka stopped
 

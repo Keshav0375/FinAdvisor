@@ -11,7 +11,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from tests.helpers import race_harness
+from tests.helpers.env import EnvConfigError
 from tests.helpers.race_harness import (
+    RaceConfig,
     RaceContext,
     RaceHarnessError,
     RaceViolationError,
@@ -162,15 +164,71 @@ async def test_cleanup_runs_after_every_interleaving_even_when_a_step_fails() ->
 async def test_a_step_that_never_finishes_fails_with_its_seed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(race_harness, "STEP_TIMEOUT_S", 0.05)
+    monkeypatch.setenv("RACE_STEP_TIMEOUT_S", "0.05")
+    never_set = asyncio.Event()
 
     async def hang(ctx: RaceContext) -> None:
-        await asyncio.sleep(10)
+        await never_set.wait()
 
-    with pytest.raises(RaceHarnessError, match=r"seed=9: step [AB]#\d did not finish"):
+    with pytest.raises(RaceHarnessError, match=r"seed=9: step [AB]#\d did not finish in 0.05s"):
         await run_interleavings(
             [hang], [claim_b], n=1, seed=9, engine=OFFLINE_ENGINE, invariant=_at_most_one_claim
         )
+
+
+@pytest.mark.parametrize("value", ["soon", "0", "-1", "nan"])
+async def test_a_bad_step_timeout_fails_naming_the_variable(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("RACE_STEP_TIMEOUT_S", value)
+    with pytest.raises(EnvConfigError, match="RACE_STEP_TIMEOUT_S"):
+        await run_interleavings(
+            [claim_a], [claim_b], n=1, seed=1, engine=OFFLINE_ENGINE, invariant=_at_most_one_claim
+        )
+
+
+def test_step_timeout_defaults_and_reads_the_environment() -> None:
+    assert RaceConfig.from_env({}).step_timeout_s == 30.0
+    assert RaceConfig.from_env({"RACE_STEP_TIMEOUT_S": " 2.5 "}).step_timeout_s == 2.5
+
+
+async def test_a_raising_cleanup_does_not_mask_the_failure_of_the_interleaving() -> None:
+    async def boom(ctx: RaceContext) -> None:
+        raise ValueError("step failed")
+
+    async def bad_cleanup(ctx: RaceContext) -> None:
+        raise OSError("cleanup failed")
+
+    with pytest.raises(RaceHarnessError, match=r"step [AB]#\d raised ValueError") as raised:
+        await run_interleavings(
+            [boom],
+            [claim_b],
+            n=1,
+            seed=3,
+            engine=OFFLINE_ENGINE,
+            invariant=_at_most_one_claim,
+            setup=_memory_setup,
+            cleanup=bad_cleanup,
+        )
+    assert any("cleanup also raised OSError" in note for note in raised.value.__notes__)
+
+
+async def test_a_raising_cleanup_alone_fails_naming_the_seed() -> None:
+    async def bad_cleanup(ctx: RaceContext) -> None:
+        raise OSError("cleanup failed")
+
+    with pytest.raises(RaceHarnessError, match=r"seed=4: cleanup raised OSError") as raised:
+        await run_interleavings(
+            [claim_a],
+            [claim_b],
+            n=1,
+            seed=4,
+            engine=OFFLINE_ENGINE,
+            invariant=_at_most_one_claim,
+            setup=_memory_setup,
+            cleanup=bad_cleanup,
+        )
+    assert isinstance(raised.value.__cause__, OSError)
 
 
 @pytest.mark.parametrize(

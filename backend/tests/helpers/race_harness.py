@@ -12,7 +12,11 @@ Per interleaving: `setup(ctx)`, the steps in the scheduled order, `invariant(ctx
 violation), then `cleanup(ctx)` always. A step that raises propagates (after cleanup), tagged with
 the seed: a test whose steps expect a conflict catches it inside the step.
 
-Knob: RACE_STEP_TIMEOUT_S (default 30), seconds one step may take.
+A cleanup that raises never hides the failure of the interleaving: it is added to that failure as a
+note (and raised, naming the seed, only when nothing else failed).
+
+Knob: RACE_STEP_TIMEOUT_S (default 30), seconds one step may take; read when a run starts, and a bad
+value fails with a message naming the variable.
 """
 
 from __future__ import annotations
@@ -20,13 +24,25 @@ from __future__ import annotations
 import asyncio
 import os
 import random
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-STEP_TIMEOUT_S = float(os.environ.get("RACE_STEP_TIMEOUT_S", "30"))
+from tests.helpers.env import positive_number
+
+STEP_TIMEOUT_ENV = "RACE_STEP_TIMEOUT_S"
+DEFAULT_STEP_TIMEOUT_S = 30.0
+
+
+@dataclass(frozen=True)
+class RaceConfig:
+    step_timeout_s: float
+
+    @classmethod
+    def from_env(cls, environ: Mapping[str, str]) -> RaceConfig:
+        return cls(positive_number(environ, STEP_TIMEOUT_ENV, DEFAULT_STEP_TIMEOUT_S, float))
 
 
 @dataclass
@@ -76,16 +92,27 @@ def build_schedule(len_a: int, len_b: int, seed: int) -> str:
     return "".join(letters)
 
 
-async def _run_step(step: Step, ctx: RaceContext, label: str) -> None:
+async def _run_step(step: Step, ctx: RaceContext, label: str, timeout_s: float) -> None:
     try:
-        await asyncio.wait_for(step(ctx), STEP_TIMEOUT_S)
+        await asyncio.wait_for(step(ctx), timeout_s)
     except TimeoutError:
         raise RaceHarnessError(
-            f"seed={ctx.seed}: step {label} did not finish in {STEP_TIMEOUT_S}s "
+            f"seed={ctx.seed}: step {label} did not finish in {timeout_s}s "
             "(a lock held across steps of the other actor?)"
         ) from None
     except Exception as exc:
         raise RaceHarnessError(f"seed={ctx.seed}: step {label} raised {exc!r}") from exc
+
+
+async def _run_cleanup(cleanup: Hook, ctx: RaceContext, failure: BaseException | None) -> None:
+    """Run `cleanup`. When the interleaving already failed, a cleanup error is attached to that
+    failure as a note and never replaces it; otherwise it is raised, naming the seed."""
+    try:
+        await cleanup(ctx)
+    except Exception as exc:
+        if failure is None:
+            raise RaceHarnessError(f"seed={ctx.seed}: cleanup raised {exc!r}") from exc
+        failure.add_note(f"seed={ctx.seed}: cleanup also raised {exc!r}")
 
 
 async def run_interleavings(
@@ -106,22 +133,27 @@ async def run_interleavings(
         raise RaceHarnessError(f"n must be at least 1, got {n}")
     if not step_a or not step_b:
         raise RaceHarnessError("both step sequences need at least one step")
+    timeout_s = RaceConfig.from_env(os.environ).step_timeout_s
     results: list[InterleavingResult] = []
     for index in range(n):
         run_seed = seed + index
         schedule = build_schedule(len(step_a), len(step_b), run_seed)
         ctx = RaceContext(engine=engine, seed=run_seed)
+        failure: BaseException | None = None
         try:
             if setup is not None:
                 await setup(ctx)
             next_a, next_b = iter(step_a), iter(step_b)
             for position, actor in enumerate(schedule):
                 step = next(next_a if actor == "A" else next_b)
-                await _run_step(step, ctx, f"{actor}#{position}")
+                await _run_step(step, ctx, f"{actor}#{position}", timeout_s)
             ok = await invariant(ctx)
+        except BaseException as exc:
+            failure = exc
+            raise
         finally:
             if cleanup is not None:
-                await cleanup(ctx)
+                await _run_cleanup(cleanup, ctx, failure)
         results.append(InterleavingResult(index, run_seed, schedule, ok))
     if raise_on_violation and any(not r.ok for r in results):
         raise RaceViolationError(results)

@@ -9,8 +9,10 @@ from collections.abc import Callable
 import pytest
 
 from tests.helpers import kafka_control
+from tests.helpers.env import EnvConfigError
 from tests.helpers.kafka_control import (
     REPO_ROOT,
+    KafkaControlConfig,
     KafkaControlError,
     KafkaState,
     kafka_off,
@@ -32,9 +34,11 @@ class FakeDocker:
         self.ps_outputs = list(ps_outputs)
         self.fail_on = fail_on
         self.calls: list[list[str]] = []
+        self.timeouts: list[object] = []
 
     def __call__(self, argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         self.calls.append(argv)
+        self.timeouts.append(kwargs["timeout"])
         assert kwargs["cwd"] == REPO_ROOT
         verb = argv[2]
         if verb == self.fail_on:
@@ -103,6 +107,44 @@ def test_start_waits_for_healthy_and_checks_it(docker: Callable[..., FakeDocker]
     docker([STARTING])
     with pytest.raises(KafkaControlError, match="not healthy"):
         start_kafka()
+
+
+def test_config_defaults_and_env_overrides() -> None:
+    assert KafkaControlConfig.from_env({}) == KafkaControlConfig(300, 60.0)
+    env = {"COMPOSE_WAIT_TIMEOUT_S": "45", "KAFKA_DOCKER_TIMEOUT_S": "7.5"}
+    assert KafkaControlConfig.from_env(env) == KafkaControlConfig(45, 7.5)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("COMPOSE_WAIT_TIMEOUT_S", "soon"),
+        ("COMPOSE_WAIT_TIMEOUT_S", "1.5"),
+        ("COMPOSE_WAIT_TIMEOUT_S", "0"),
+        ("KAFKA_DOCKER_TIMEOUT_S", "-3"),
+        ("KAFKA_DOCKER_TIMEOUT_S", "fast"),
+    ],
+)
+def test_a_bad_knob_fails_naming_the_variable(
+    monkeypatch: pytest.MonkeyPatch, docker: Callable[..., FakeDocker], name: str, value: str
+) -> None:
+    docker([RUNNING, RUNNING])
+    monkeypatch.setenv(name, value)
+    with pytest.raises(EnvConfigError, match=name):
+        KafkaControlConfig.from_env({name: value})
+    with pytest.raises(EnvConfigError, match=name):
+        start_kafka()
+
+
+def test_timeouts_are_read_from_the_environment_at_each_call(
+    monkeypatch: pytest.MonkeyPatch, docker: Callable[..., FakeDocker]
+) -> None:
+    monkeypatch.setenv("COMPOSE_WAIT_TIMEOUT_S", "45")
+    monkeypatch.setenv("KAFKA_DOCKER_TIMEOUT_S", "7")
+    fake = docker([RUNNING])
+    start_kafka()
+    assert fake.calls[0][5:7] == ["--wait-timeout", "45"]
+    assert fake.timeouts == [52.0, 7.0]
 
 
 def test_a_failing_compose_call_raises_with_its_output(docker: Callable[..., FakeDocker]) -> None:
