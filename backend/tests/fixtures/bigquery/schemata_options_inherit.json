@@ -1,0 +1,13 @@
+{
+ "kind": "bigquery#getQueryResultsResponse",
+ "jobComplete": true,
+ "schema": {
+  "fields": [
+   {"name": "option_value", "type": "STRING", "mode": "NULLABLE"}
+  ]
+ },
+ "totalRows": "1",
+ "rows": [
+  {"f": [{"v": "48"}]}
+ ]
+}
