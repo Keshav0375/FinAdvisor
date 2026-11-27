@@ -1,0 +1,77 @@
+
+== setup ==
+mode=DEMO (MOCK upstream, not api.anthropic.com) upstream=http://127.0.0.1:9100 kong=kong:3.9.4
+kong: 3.9.4
+
+== AC1: stream:true through the plain-proxy route, native events ==
+status 200; events: message_start content_block_start content_block_delta content_block_delta content_block_delta content_block_delta content_block_delta content_block_stop message_delta message_stop 
+PASS stream_request_returns_200 (got 200)
+PASS stream_first_event_message_start_last_message_stop (first=message_start last=message_stop)
+PASS stream_contains_content_block_delta
+PASS stream_content_type_event_stream
+PASS global_rate_limiting_headers_present (X-RateLimit-Limit-Minute: 6000)
+PASS upstream_received_injected_key_exactly_once (MOCK)
+PASS egress_key_and_authorization_not_forwarded_upstream (MOCK)
+PASS client_sent_x_api_key_and_authorization_replaced_not_forwarded (MOCK, got 200)
+
+== AC1: time to first byte, Kong minus direct, median of 20 (interleaved) ==
+MOCK upstream: this is proxy overhead on one host, not network latency to api.anthropic.com.
+TTFB median ms: kong=2.3 direct=1.0 delta=1.3
+total median ms: kong=219.7 direct=224.9 delta=-5.2
+PASS ttfb_median_recorded_for_kong_and_direct (20 runs each)
+
+== AC2: tools array -> tool_use, tool_result follow-up through the same route ==
+status 200; tool_use id: toolu_mock_1
+PASS tools_request_returns_tool_use_block
+follow-up with tool_result status 200
+PASS tool_result_followup_accepted_200_same_route
+PASS streamed_tool_use_has_input_json_delta
+
+== AC3: authentication and source address ==
+PASS test_no_apikey_returns_401 (got 401)
+PASS test_wrong_apikey_returns_401 (got 401)
+PASS test_source_inside_allow_list_returns_200 (allow 127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16; got 200)
+second Kong, allow list 203.0.113.0/24, valid egress key: status 403, body {  "message":"IP address not allowed: 192.168.215.1",  "request_id":"99c45738baea17284a6b567fd916ed41"}
+PASS test_ip_outside_allow_list_returns_403 (got 403)
+
+== AC4: Kong logs ==
+captured 129 log lines from the plain-proxy Kong (access log, error log, file-log JSON)
+grep -c Anthropic key = 0
+PASS kong_log_contains_no_Anthropic_key (grep -c = 0)
+grep -c egress key = 0
+PASS kong_log_contains_no_egress_key (grep -c = 0)
+grep -c prompt text = 0
+PASS kong_log_contains_no_prompt_text (grep -c = 0)
+log lines with token counts:
+  26 egress_usage status=200 input_tokens=11 output_tokens=7
+   3 egress_usage status=401 input_tokens=n/a output_tokens=n/a
+PASS kong_log_contains_token_counts_11_in_7_out (MOCK values, plain proxy, custom Lua)
+PASS mock_upstream_log_contains_no_prompt_text (grep -c = 0)
+
+== AC4 negative control + global rate limit (Kong 8003: serialize redaction removed, 2/min) ==
+3 requests against a 2/min limit: 200 200 429
+PASS global_rate_limiting_returns_429_over_the_limit
+file-log without set_serialize_value: grep -c Anthropic key = 2
+PASS without_redaction_the_anthropic_key_is_in_file_log (control, grep -c = 2)
+
+== ai-proxy 3.9.4 experiments (provider anthropic, route_type preserve) ==
+negative control: llm_format anthropic (ADR-011 says 3.10+)
+              in 'llm_format': expected one of: openai, bedrock, gemini
+PASS ai_proxy_3_9_4_has_no_anthropic_llm_format (accepts openai, bedrock, gemini only)
+negative control: model.name set -> client model must match
+client model mock-model, configured pinned-model: status 400, body {"error":{"message":"cannot use own model - must be: pinned-model"}}
+PASS ai_proxy_with_model_name_rejects_other_models (one ai-proxy per model, got 400)
+preserve without model.name (the usable form)
+PASS ai_proxy_preserve_streams_native_events (got 200)
+PASS ai_proxy_preserve_returns_tool_use (got 200)
+(ai-proxy preserve, JSON request) status 200
+FINDING path handling: POST .../v1/messages/count_tokens -> ai-proxy preserve 200 (pinned to upstream_path /v1/messages), plain proxy 404 (path forwarded; the mock has no count_tokens, so 404 is the mock's answer, live it is a real endpoint)
+log_statistics as logged by the ai-proxy variant (usage object of each request):
+   5 "usage":{"time_per_token":0,"cost":0,"total_tokens":0,"prompt_tokens":0,"completion_tokens":0}
+PASS ai_proxy_log_statistics_usage_object_is_logged
+FINDING ai-proxy preserve log_statistics requests with non-zero token counts: 0 of 5 (the code skips response parsing in preserve mode: normalize-json-response.lua, parse-sse-chunk.lua, normalize-sse-chunk.lua)
+PASS ai_proxy_variant_log_contains_no_keys_nor_prompt (with set_serialize_value redaction)
+
+== summary ==
+PASS=29 FAIL=0
+All results above are from the MOCK upstream, not api.anthropic.com: provisional, confirm with --live (K6).

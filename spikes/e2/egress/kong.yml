@@ -1,0 +1,77 @@
+_format_version: "3.0"
+
+# E2-T2 spike config, plain-proxy variant. Scratch only, never shipped: the production route is E2-T20.
+# run.sh renders the __PLACEHOLDERS__ into a temp file; none of them is a secret. The Anthropic key is
+# never in this file: Kong reads it from the container environment (vault env) at request time.
+# Kong and the upstream share one network namespace (run.sh).
+consumers:
+  - username: chat-api
+    keyauth_credentials:
+      - key: __EGRESS_KEY__
+
+services:
+  - name: llm-egress
+    url: __UPSTREAM__
+    # Bounded by knobs (ms). The read timeout also bounds the gap between two streamed events.
+    connect_timeout: __CONNECT_TIMEOUT_MS__
+    write_timeout: __READ_TIMEOUT_MS__
+    read_timeout: __READ_TIMEOUT_MS__
+    retries: 0
+    routes:
+      - name: llm-egress-anthropic
+        paths: [/egress/anthropic]
+        strip_path: true
+        plugins:
+          - name: key-auth
+            config:
+              key_names: [apikey]
+              hide_credentials: true
+          - name: ip-restriction
+            config:
+              allow: [__ALLOW__]
+          # pre-function (priority 1000000) runs before request-transformer (801).
+          # access: hand the key from the container environment to request-transformer through the
+          #   request-scoped shared ctx, and keep it out of every log plugin's serialized request.
+          # body_filter + log: keep the first and last 2 KB of the response and log the token counts
+          #   (the plain proxy has no log_statistics; counts are read from the native usage fields).
+          - name: pre-function
+            config:
+              access:
+                - |
+                  kong.ctx.shared.anthropic_key = kong.vault.get("{vault://env/anthropic-api-key}")
+                  kong.log.set_serialize_value("request.headers.x-api-key", "REDACTED")
+              body_filter:
+                - |
+                  local ctx = kong.ctx.plugin
+                  local chunk = ngx.arg[1]
+                  if chunk and #chunk > 0 then
+                    if #(ctx.head or "") < 2048 then ctx.head = (ctx.head or "") .. chunk end
+                    ctx.tail = ((ctx.tail or "") .. chunk):sub(-2048)
+                  end
+              log:
+                - |
+                  local ctx = kong.ctx.plugin
+                  local tin = (ctx.head or ""):match('"input_tokens":%s*(%d+)')
+                  local tout = (ctx.tail or ""):match('.*"output_tokens":%s*(%d+)')
+                  kong.log.notice("egress_usage status=", ngx.status, " input_tokens=", tin or "n/a", " output_tokens=", tout or "n/a")
+          - name: request-transformer
+            config:
+              remove:
+                headers: [x-api-key, authorization]
+              add:
+                headers:
+                  - "x-api-key:$(shared.anthropic_key)"
+
+plugins:
+  # Global LLM call limit: one bucket for the whole egress service, local policy (one gateway node).
+  - name: rate-limiting
+    service: llm-egress
+    config:
+      limit_by: service
+      minute: __RATE_PER_MIN__
+      policy: local
+      hide_client_headers: false
+  - name: file-log
+    service: llm-egress
+    config:
+      path: /dev/stdout
