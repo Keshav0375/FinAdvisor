@@ -19,6 +19,8 @@ from datetime import datetime
 import pytest
 
 from scripts import spike_bigquery_time_travel as spike
+from src.config import Settings
+from src.lifecycle import bq_probe
 
 pytestmark = pytest.mark.live
 
@@ -30,8 +32,14 @@ def need(name: str) -> str:
     return value
 
 
-def run_query() -> spike.RunQuery:
-    return spike.bq_query_runner(need("BQ_SPIKE_PROJECT"), need("BQ_SPIKE_REGION"))
+def run_query() -> bq_probe.RunQuery:
+    settings = Settings()  # type: ignore[call-arg]
+    return bq_probe.bq_query_runner(
+        need("BQ_SPIKE_PROJECT"),
+        need("BQ_SPIKE_REGION"),
+        bq_bin=settings.bq_bin,
+        timeout_s=settings.bq_timeout_s,
+    )
 
 
 def parse(name: str) -> datetime:
@@ -42,27 +50,25 @@ def parse(name: str) -> datetime:
 def test_live_probe_open_inside_window() -> None:
     table = need("BQ_SPIKE_TABLE")
     spike.check_spike_dataset(table.split(".")[1])
-    assert (
-        spike.bq_time_travel_probe(table, parse("BQ_SPIKE_TS_INSIDE"), run_query=run_query())
-        == "open"
+    result = bq_probe.bq_time_travel_probe(
+        table, parse("BQ_SPIKE_TS_INSIDE"), run_query=run_query()
     )
+    assert result == "open"
 
 
 # AC1: a timestamp older than the window is rejected by BigQuery and maps to closed.
 def test_live_probe_closed_outside_window() -> None:
     table = need("BQ_SPIKE_TABLE")
     spike.check_spike_dataset(table.split(".")[1])
-    assert (
-        spike.bq_time_travel_probe(table, parse("BQ_SPIKE_TS_OLD"), run_query=run_query())
-        == "closed"
-    )
+    result = bq_probe.bq_time_travel_probe(table, parse("BQ_SPIKE_TS_OLD"), run_query=run_query())
+    assert result == "closed"
 
 
 # AC2: a dataset created with no options after ALTER PROJECT default 48 reads 48.
 def test_live_new_dataset_inherits_48() -> None:
     dataset = need("BQ_SPIKE_INHERIT_DATASET")
     spike.check_spike_dataset(dataset)
-    hours = spike.read_time_travel_hours(
+    hours = bq_probe.read_time_travel_hours(
         need("BQ_SPIKE_PROJECT"), need("BQ_SPIKE_REGION"), dataset, run_query=run_query()
     )
-    assert hours == spike.EXPECTED_HOURS
+    assert hours == bq_probe.EXPECTED_HOURS

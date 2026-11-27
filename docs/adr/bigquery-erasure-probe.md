@@ -64,7 +64,7 @@ decides whether ADR-030 and deep-dive 05-1 5.14 get a sentence about Customer Ca
 
 | Window | Receipt phase 2 term | How |
 |---|---|---|
-| BigQuery time travel, 48 h | observable: `erasure-verify` runs `bq_time_travel_probe` after the window timer | probe, result `closed` |
+| BigQuery time travel, 48 h | observable: `erasure-verify` runs `bq_time_travel_probe` after the window timer | probe, result `closed` (never `open` or `open_empty`) |
 | BigQuery 7 d fail-safe | `documented` | stated from the docs above, **not measured**, no query can read it |
 
 The receipt must never print "verified closed" for the fail-safe. "Trigger to revisit" (ADR-030): an
@@ -72,25 +72,33 @@ observable fail-safe probe appears.
 
 ## The probe function
 
-`bq_time_travel_probe(table, ts, *, run_query) -> "open" | "closed"`:
+Lives in `backend/src/lifecycle/bq_probe.py` (the arch names no module for erasure-verify, so this is
+the `lifecycle` package default) so erasure-verify imports a product module, not a spike script. The
+CLI `backend/scripts/spike_bigquery_time_travel.py` is a thin caller.
+
+`bq_time_travel_probe(table, ts, *, run_query) -> "open" | "open_empty" | "closed"`:
 
 - Runs ``SELECT COUNT(*) AS n FROM `table` FOR SYSTEM_TIME AS OF TIMESTAMP 'ts'`` (ts as UTC).
-- Rows counted: **open**. No rows at ts: **closed**. BigQuery refuses the snapshot time as outside
-  the window: **closed**.
+- Rows counted: **open**. BigQuery reads the table at ts but finds no rows: **open_empty** (the
+  window is still open for that ts, for example ts is after the delete; never a closed signal).
+  BigQuery refuses the snapshot time as outside the window: **closed**, and only that error.
 - Anything else raises (permission, quota, a missing table, an error text it does not know). It never
   maps an unknown error to `closed`: a false `closed` would sign a receipt falsely. The price is that
   a changed BigQuery message makes the probe raise until the text is updated, which is visible.
+- erasure-verify signs the window only on `closed`; `open` and `open_empty` both mean "not yet".
 - The message variant "Cannot read before ..." is not accepted: it may also mean "before the table
   existed", which is not "outside the window". Open question for K1: record the exact text of both
   cases.
 - `run_query` is injected. Live mode uses `bq query` through `subprocess.run` with an argv list, no
   shell, and a timeout; no new dependency (`google-cloud-bigquery` is not in the stack). Table, project
   and region names are matched against a pattern before they enter SQL.
+- Config knobs (Settings, `.env.example`): `BQ_BIN` (default `bq`) and `BQ_TIMEOUT_S` (default 120,
+  must be above 0). The CLI reads the same two env keys with the Settings field constraints.
 - **Limit:** the count is over the whole table. The scratch table holds only the marker row. For
   erasure-verify, a row-scoped variant is needed (a later ticket; the erasure DML is out of scope).
-- A probe at a timestamp after the delete but inside the window returns `closed` because the row is
-  absent. erasure-verify must probe at a timestamp just before the delete (the live plan records
-  `t_before_delete` for that).
+- A probe at a timestamp after the delete but inside the window returns `open_empty`, not `closed`,
+  because the window still reads the table. erasure-verify must probe at a timestamp just before the
+  delete (the live plan records `t_before_delete` for that) and sign only on `closed`.
 
 ## Demo mode: what was run
 

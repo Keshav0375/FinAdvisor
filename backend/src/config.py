@@ -117,6 +117,12 @@ class Settings(BaseSettings):
     # other FCA knobs belong to the connector (E11-T20), not to app boot.
     fca_api_rate_limit_rps: float = _env("FCA_API_RATE_LIMIT_RPS", default=1.0, gt=0)
 
+    # BigQuery erasure probe (src/lifecycle/bq_probe.py): the `bq` CLI binary and the seconds one
+    # `bq query` may run before it is killed. The CLI is used, not a client library, because the
+    # stack lists none; a large region or a slow first call may need a longer timeout.
+    bq_bin: str = _env("BQ_BIN", default="bq", min_length=1)
+    bq_timeout_s: float = _env("BQ_TIMEOUT_S", default=120.0, gt=0)
+
     # PII
     pii_mode: str = _env("PII_MODE", default="regex")
     gcp_project_id: str = _env("GCP_PROJECT_ID", default="")

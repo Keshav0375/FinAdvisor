@@ -4,77 +4,72 @@ Run by hand, never in the PR gate, as a module from backend/ (not `python script
 
     cd backend && python -m scripts.spike_bigquery_time_travel
 
-Demo mode (the default) reads the recorded fixtures in tests/fixtures/bigquery, which have the
-documented shape of jobs.getQueryResults but illustrative values, and prints a verdict labelled
-UNVERIFIED-pending-K1. Nothing is measured. Live mode needs a throwaway GCP project (K1) and the
-`bq` CLI; it only touches datasets named fa_spike_*:
+A thin CLI over src/lifecycle/bq_probe.py, where the reusable probe lives. Demo mode (the default)
+reads the recorded fixtures in tests/fixtures/bigquery, which have the documented shape of
+jobs.getQueryResults but illustrative values, and prints a verdict labelled UNVERIFIED-pending-K1.
+Nothing is measured. Live mode needs a throwaway GCP project (K1) and the `bq` CLI; it only touches
+datasets named fa_spike_*. The binary and the timeout come from BQ_BIN and BQ_TIMEOUT_S
+(Settings.bq_bin and Settings.bq_timeout_s, same defaults):
 
     --mode live --project P --dataset fa_spike_X --region R                      print the commands
     --mode live --project P --dataset fa_spike_X --region R --action probe --ts T   one probe
     --mode live --project P --dataset fa_spike_X --region R --action schemata       read the window
 
-The reusable function is `bq_time_travel_probe(table, ts, run_query=...)`: "open" while the
-time-travel window can still read the table as of ts, "closed" once it cannot. The fail-safe period
-is not queryable, so no probe can observe it. The findings and the reasoning are in
-docs/adr/bigquery-erasure-probe.md.
+The findings and the reasoning are in docs/adr/bigquery-erasure-probe.md.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
-import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, cast
 
 import structlog
+from pydantic import TypeAdapter, ValidationError
+
+from src.config import Settings
+from src.lifecycle.bq_probe import (
+    EXPECTED_HOURS,
+    NAME_RE,
+    PROJECT_RE,
+    REGION_RE,
+    BqProbeError,
+    BqRunner,
+    ProbeResult,
+    QueryError,
+    RunQuery,
+    bq_query_runner,
+    bq_time_travel_probe,
+    check_pattern,
+    format_ts,
+    read_time_travel_hours,
+)
 
 log = structlog.get_logger()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_FIXTURES_DIR = PROJECT_ROOT / "backend" / "tests" / "fixtures" / "bigquery"
 
-# Everything below is spike-local on purpose: the script is run by hand, once, against a throwaway
-# dataset. None of it is a product knob, so none of it goes into Settings.
-BQ = "bq"
-BQ_TIMEOUT_S = 120.0
 # The live path refuses any dataset that does not match this, so it cannot touch real data.
 SPIKE_DATASET_RE = re.compile(r"fa_spike_[a-z0-9_]+")
-PROJECT_RE = re.compile(r"[a-z][a-z0-9-]*")
-REGION_RE = re.compile(r"[a-z][a-z0-9-]*")
-NAME_RE = re.compile(r"[A-Za-z0-9_]+")
-TABLE_RE = re.compile(r"[a-z][a-z0-9-]*\.[A-Za-z0-9_]+\.[A-Za-z0-9_]+")
 DEFAULT_TABLE_NAME = "marker"
 INHERIT_SUFFIX = "_inherit"
-# 48 h is the documented minimum of the window and the value the arch sets on every dataset.
-EXPECTED_HOURS = 48
-# BigQuery's error for a snapshot time outside the window. The docs do not state the text, so this
-# is UNVERIFIED-pending-K1: both parts must be present to count as "outside the window". The
-# variant "Cannot read before ..." is not accepted, it may also mean "before the table existed".
-OUTSIDE_WINDOW_HEAD = "invalid snapshot time"
-OUTSIDE_WINDOW_TAIL = "time travel window"
 
 OBSERVABLE = "time-travel window observable"
 MISMATCH = "mismatch"
 UNVERIFIED = "UNVERIFIED-pending-K1"
 
-Probe = Literal["open", "closed"]
-RunQuery = Callable[[str], list[dict[str, Any]]]
-BqRunner = Callable[[list[str]], str]
-
 
 class SpikeError(Exception):
-    """A probe step failed in a way the operator must see (bad input, missing file, bq failure)."""
-
-
-class QueryError(SpikeError):
-    """BigQuery rejected a query; the message is BigQuery's text, kept for classification."""
+    """A spike step failed in a way the operator must see (bad CLI input, missing fixture)."""
 
 
 @dataclass(frozen=True)
@@ -90,6 +85,25 @@ class Verdict:
         return text
 
 
+def configured[T](
+    field: str, env_name: str, kind: type[T], environ: Mapping[str, str] | None = None
+) -> T:
+    """A Settings field read from its env var with the field's own constraints, else its default.
+
+    Settings is not built: it would need every secret for a script that only drives `bq`.
+    """
+    env = os.environ if environ is None else environ
+    info = Settings.model_fields[field]
+    raw = env.get(env_name)
+    if raw is None:
+        return cast(T, info.default)
+    adapter: TypeAdapter[T] = TypeAdapter(Annotated[kind, *info.metadata])
+    try:
+        return adapter.validate_python(raw)
+    except ValidationError as exc:
+        raise SpikeError(f"{env_name}={raw!r} is invalid: {exc.errors()[0]['msg']}") from exc
+
+
 def check_spike_dataset(dataset: str) -> None:
     if not SPIKE_DATASET_RE.fullmatch(dataset):
         raise SpikeError(
@@ -98,99 +112,19 @@ def check_spike_dataset(dataset: str) -> None:
         )
 
 
-def _check(pattern: re.Pattern[str], value: str, what: str) -> str:
-    if not pattern.fullmatch(value):
-        raise SpikeError(f"{what} {value!r} does not match {pattern.pattern!r}")
-    return value
-
-
-def format_ts(ts: datetime) -> str:
-    if ts.tzinfo is None:
-        raise SpikeError("the timestamp has no timezone; pass an aware datetime (UTC)")
-    return ts.astimezone(UTC).isoformat(timespec="microseconds")
-
-
 def parse_ts(value: str) -> datetime:
     try:
         ts = datetime.fromisoformat(value)
     except ValueError as exc:
         raise SpikeError(f"{value!r} is not an ISO 8601 timestamp") from exc
     if ts.tzinfo is None:
-        raise SpikeError(
-            f"{value!r} has no timezone; write it in UTC, for example 2026-11-20T10:00:00Z"
-        )
+        raise SpikeError(f"{value!r} has no timezone; write it in UTC, like 2026-11-20T10:00:00Z")
     return ts
 
 
-def probe_sql(table: str, ts: datetime) -> str:
-    """The query text. BigQuery has no identifier parameters, so the table name is validated."""
-    _check(TABLE_RE, table, "table name (need project.dataset.table)")
-    return f"SELECT COUNT(*) AS n FROM `{table}` FOR SYSTEM_TIME AS OF TIMESTAMP '{format_ts(ts)}'"
-
-
-def is_outside_window(message: str) -> bool:
-    text = message.lower()
-    return OUTSIDE_WINDOW_HEAD in text and OUTSIDE_WINDOW_TAIL in text
-
-
-def _count(rows: list[dict[str, Any]]) -> int:
-    if len(rows) != 1 or "n" not in rows[0]:
-        raise SpikeError(f"the probe expected one row with a column n, got {rows!r}")
-    try:
-        count = int(rows[0]["n"])
-    except (TypeError, ValueError) as exc:
-        raise SpikeError(f"the probe count {rows[0]['n']!r} is not an integer") from exc
-    if count < 0:
-        raise SpikeError(f"the probe count {count} is negative")
-    return count
-
-
-def bq_time_travel_probe(table: str, ts: datetime, *, run_query: RunQuery) -> Probe:
-    """Read `table` as of `ts` through the time-travel window.
-
-    Returns "open" when the read works and finds rows (the data is still recoverable through time
-    travel), and "closed" when BigQuery refuses a snapshot time outside the window or the table has
-    no rows at ts. Every other failure (permissions, quota, a missing table, a message this code
-    does not know) raises and is never mapped to "closed": a false "closed" would sign an erasure
-    receipt falsely. The fail-safe period cannot be read by any query, so it is not covered.
-
-    The count is over the whole table: the caller passes a table that holds only the rows under
-    test (the scratch marker table here). A row-scoped variant for erasure-verify is a later ticket.
-    """
-    sql = probe_sql(table, ts)
-    try:
-        rows = run_query(sql)
-    except QueryError as exc:
-        if is_outside_window(str(exc)):
-            return "closed"
-        raise
-    return "open" if _count(rows) > 0 else "closed"
-
-
-def schemata_sql(project: str, region: str, dataset: str) -> str:
-    _check(PROJECT_RE, project, "project")
-    _check(REGION_RE, region, "region")
-    _check(NAME_RE, dataset, "dataset")
-    return (
-        "SELECT option_value "
-        f"FROM `{project}`.`region-{region}`.INFORMATION_SCHEMA.SCHEMATA_OPTIONS "
-        f"WHERE schema_name = '{dataset}' AND option_name = 'max_time_travel_hours'"
-    )
-
-
-def read_time_travel_hours(project: str, region: str, dataset: str, *, run_query: RunQuery) -> int:
-    rows = run_query(schemata_sql(project, region, dataset))
-    if len(rows) != 1 or "option_value" not in rows[0]:
-        raise SpikeError(f"no max_time_travel_hours row for dataset {dataset!r}: {rows!r}")
-    try:
-        return int(rows[0]["option_value"])
-    except (TypeError, ValueError) as exc:
-        raise SpikeError(
-            f"max_time_travel_hours {rows[0]['option_value']!r} is not an integer"
-        ) from exc
-
-
-def compute_verdict(inside: Probe, outside: Probe, hours: int, verified: bool) -> Verdict:
+def compute_verdict(
+    inside: ProbeResult, outside: ProbeResult, hours: int, verified: bool
+) -> Verdict:
     if inside != "open":
         return Verdict(
             MISMATCH, f"the probe inside the window returned {inside}, expected open", verified
@@ -214,45 +148,6 @@ def compute_verdict(inside: Probe, outside: Probe, hours: int, verified: bool) -
         "the 7 d fail-safe is not queryable (documented, not measured)",
         verified,
     )
-
-
-def run_bq(cmd: list[str]) -> str:
-    try:
-        done = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=BQ_TIMEOUT_S)
-    except FileNotFoundError as exc:
-        raise SpikeError(f"{cmd[0]} is not installed or not on PATH") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise SpikeError(f"{cmd[0]} timed out after {BQ_TIMEOUT_S} s") from exc
-    except subprocess.CalledProcessError as exc:
-        raise QueryError(f"bq failed: {(exc.stderr or '').strip()}") from exc
-    return done.stdout
-
-
-def bq_query_runner(project: str, location: str, runner: BqRunner = run_bq) -> RunQuery:
-    _check(PROJECT_RE, project, "project")
-    _check(REGION_RE, location, "region")
-
-    def run_query(sql: str) -> list[dict[str, Any]]:
-        raw = runner(
-            [
-                BQ,
-                f"--project_id={project}",
-                f"--location={location}",
-                "query",
-                "--nouse_legacy_sql",
-                "--format=json",
-                sql,
-            ]
-        )
-        try:
-            rows = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise SpikeError("bq output is not valid JSON") from exc
-        if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
-            raise SpikeError("bq output is not a JSON list of rows")
-        return rows
-
-    return run_query
 
 
 def read_json(path: Path) -> Any:
@@ -300,17 +195,19 @@ def fixture_runner(directory: Path, meta: dict[str, Any]) -> RunQuery:
     return run_query
 
 
-def live_commands(project: str, dataset: str, region: str, table_name: str) -> list[str]:
+def live_commands(
+    project: str, dataset: str, region: str, table_name: str, bq_bin: str
+) -> list[str]:
     """The exact commands of the live run, in order, each quoted with shlex. '#' lines are notes."""
-    _check(PROJECT_RE, project, "project")
-    _check(REGION_RE, region, "region")
+    check_pattern(PROJECT_RE, project, "project")
+    check_pattern(REGION_RE, region, "region")
     check_spike_dataset(dataset)
-    _check(NAME_RE, table_name, "table name")
+    check_pattern(NAME_RE, table_name, "table name")
     inherit = f"{dataset}{INHERIT_SUFFIX}"
     table = f"{project}.{dataset}.{table_name}"
 
     def bq(*args: str) -> str:
-        return shlex.join([BQ, f"--project_id={project}", f"--location={region}", *args])
+        return shlex.join([bq_bin, f"--project_id={project}", f"--location={region}", *args])
 
     def sql(text: str) -> str:
         return bq("query", "--nouse_legacy_sql", text)
@@ -385,15 +282,21 @@ def evaluate_demo(directory: Path) -> int:
     return 0 if result.verdict == OBSERVABLE else 1
 
 
-def run_live(parser: argparse.ArgumentParser, args: argparse.Namespace, runner: BqRunner) -> int:
+def run_live(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, runner: BqRunner | None
+) -> int:
     if not args.project or not args.dataset or not args.region:
         parser.error("--mode live needs --project, --dataset and --region")
     check_spike_dataset(args.dataset)
+    bq_bin = configured("bq_bin", "BQ_BIN", str)
+    timeout_s = configured("bq_timeout_s", "BQ_TIMEOUT_S", float)
     if args.action == "commands":
-        cmds = live_commands(args.project, args.dataset, args.region, args.table)
+        cmds = live_commands(args.project, args.dataset, args.region, args.table, bq_bin)
         sys.stdout.write("\n".join(cmds) + "\n")
         return 0
-    run_query = bq_query_runner(args.project, args.region, runner)
+    run_query = bq_query_runner(
+        args.project, args.region, bq_bin=bq_bin, timeout_s=timeout_s, runner=runner
+    )
     if args.action == "probe":
         if not args.ts:
             parser.error("--action probe needs --ts")
@@ -411,14 +314,14 @@ def run_live(parser: argparse.ArgumentParser, args: argparse.Namespace, runner: 
     return 0 if ok else 1
 
 
-def main(argv: list[str] | None = None, runner: BqRunner = run_bq) -> int:
+def main(argv: list[str] | None = None, runner: BqRunner | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
         if args.mode == "demo":
             return evaluate_demo(args.fixtures_dir or DEFAULT_FIXTURES_DIR)
         return run_live(parser, args, runner)
-    except SpikeError as exc:
+    except (SpikeError, BqProbeError) as exc:
         log.error("spike_failed", error=str(exc))
         return 1
 
